@@ -184,7 +184,12 @@ const ChatInterface = ({ selectedModel, isConnected, onToggleModelSelector, show
                 <div className="message-meta">
                   {new Date(message.timestamp).toLocaleTimeString()}
                   {message.model && ` • ${message.model}`}
-                  <br></br>Thought for {message.timeTaken != null && ` ${(message.timeTaken / 1000).toFixed(2)}s`}
+                  {message.role !== 'user' && (
+                    <>
+                      <br />
+                      Thought for {message.timeTaken != null && `${(message.timeTaken / 1000).toFixed(2)}s`}
+                    </>
+                  )}
                 </div>
               </div>
             </div>
