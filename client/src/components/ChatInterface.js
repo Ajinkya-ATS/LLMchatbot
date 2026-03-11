@@ -2,13 +2,16 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, AlertCircle, Settings } from 'lucide-react';
 import { sendMessage } from '../services/api';
 
-const ChatInterface = ({ selectedModel, isConnected, onToggleModelSelector }) => {
+const ChatInterface = ({ selectedModel, isConnected, onToggleModelSelector, showMessage }) => {
   const [messages, setMessages] = useState([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
+  const [thinkingMs, setThinkingMs] = useState(0);
+  const thinkingIntervalRef = useRef(null);
+  const thinkingStartRef = useRef(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -27,7 +30,7 @@ const ChatInterface = ({ selectedModel, isConnected, onToggleModelSelector }) =>
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
-    
+
     if (!inputMessage.trim() || !selectedModel || isLoading || !isConnected) {
       return;
     }
@@ -43,6 +46,15 @@ const ChatInterface = ({ selectedModel, isConnected, onToggleModelSelector }) =>
     setInputMessage('');
     setIsLoading(true);
     setError(null);
+
+    const startTime = Date.now();
+    // start thinking timer (in case the effect doesn't pick it up immediately)
+    thinkingStartRef.current = startTime;
+    setThinkingMs(0);
+    if (thinkingIntervalRef.current) clearInterval(thinkingIntervalRef.current);
+    thinkingIntervalRef.current = setInterval(() => {
+      setThinkingMs(Date.now() - thinkingStartRef.current);
+    }, 100);
 
     try {
       const conversationHistory = messages.map(msg => ({
@@ -64,12 +76,29 @@ const ChatInterface = ({ selectedModel, isConnected, onToggleModelSelector }) =>
         model: response.model
       };
 
+
+      // compute time taken
+      const durationMs = Date.now() - startTime;
+      assistantMessage.timeTaken = durationMs; // ms
+
+      // stop thinking timer
+      if (thinkingIntervalRef.current) {
+        clearInterval(thinkingIntervalRef.current);
+        thinkingIntervalRef.current = null;
+      }
+      setThinkingMs(durationMs);
+
+      // show final toast: 'Thought for S.MS Seconds'
+      if (showMessage) {
+        showMessage(`Thought for ${(durationMs / 1000).toFixed(2)} Seconds`, 2000);
+      }
+
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
       console.error('Error sending message:', error);
-      
+
       let errorMessage = 'Failed to send message. Please try again.';
-      
+
       if (error.code === 'ECONNABORTED') {
         errorMessage = `Request timed out. The ${selectedModel.name} model is taking longer than expected. Try a smaller model or simpler question.`;
       } else if (error.response?.data?.error) {
@@ -77,7 +106,7 @@ const ChatInterface = ({ selectedModel, isConnected, onToggleModelSelector }) =>
       } else if (error.message.includes('timeout')) {
         errorMessage = `The ${selectedModel.name} model is taking too long to respond. Try a smaller model or check if Ollama is running properly.`;
       }
-      
+
       setError(errorMessage);
     } finally {
       setIsLoading(false);
@@ -117,7 +146,7 @@ const ChatInterface = ({ selectedModel, isConnected, onToggleModelSelector }) =>
           <span className="model-size">({selectedModel.size})</span>
         </div>
         <div className="chat-header-actions">
-          <button 
+          <button
             className="toggle-model-btn"
             onClick={onToggleModelSelector}
             title="Change model"
@@ -126,7 +155,7 @@ const ChatInterface = ({ selectedModel, isConnected, onToggleModelSelector }) =>
             Change Model
           </button>
           {messages.length > 0 && (
-            <button 
+            <button
               className="clear-chat-btn"
               onClick={clearChat}
               title="Clear chat"
@@ -155,6 +184,7 @@ const ChatInterface = ({ selectedModel, isConnected, onToggleModelSelector }) =>
                 <div className="message-meta">
                   {new Date(message.timestamp).toLocaleTimeString()}
                   {message.model && ` • ${message.model}`}
+                  <br></br>Thought for {message.timeTaken != null && ` ${(message.timeTaken / 1000).toFixed(2)}s`}
                 </div>
               </div>
             </div>
@@ -168,7 +198,7 @@ const ChatInterface = ({ selectedModel, isConnected, onToggleModelSelector }) =>
             </div>
             <div className="message-content">
               <div className="typing-indicator">
-                <span>Thinking</span>
+                <span>Thinking {(thinkingMs / 1000).toFixed(2)}s</span>
                 <div className="typing-dots">
                   <div className="typing-dot"></div>
                   <div className="typing-dot"></div>
