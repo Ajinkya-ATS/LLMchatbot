@@ -112,4 +112,4 @@ def pull_model():
 if __name__ == '__main__':
     print(f"Server running on port {PORT}")
     print(f"Ollama base URL: {OLLAMA_BASE_URL}")
-    app.run(host='0.0.0.0', port=PORT, debug=False)
+    app.run(host='0.0.0.0', port=PORT, debug=False, threaded=True)

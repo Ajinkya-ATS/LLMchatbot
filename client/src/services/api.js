@@ -4,7 +4,7 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5001/api
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 120000, // 2 minute timeout for large models
+  timeout: 300000, // 5 minute timeout for large models
 });
 
 // Request interceptor
