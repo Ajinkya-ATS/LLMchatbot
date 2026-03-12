@@ -17,4 +17,4 @@ class ToolManager:
                 ),
                 globals={"__builtins__": {}}  # basically avoiding harmful code execution like import os
             )
-        ]
+        ] # A list of tools
