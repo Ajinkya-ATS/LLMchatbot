@@ -1,4 +1,4 @@
-from langchain_classic.agents import create_react_agent
+from langchain_classic.agents import create_react_agent, AgentExecutor
 from langchain_ollama import ChatOllama
 from .tool_manager import ToolManager
 from .prompt_manager import PromptManager
@@ -16,4 +16,9 @@ class AgentManager:
         prompt = PromptManager.get_react_prompt()
 
         agent = create_react_agent(llm, tools, prompt=prompt)
-        return agent
+        executor = AgentExecutor.from_agent_and_tools(
+            agent=agent,
+            tools=tools,
+            verbose=True
+        )
+        return executor

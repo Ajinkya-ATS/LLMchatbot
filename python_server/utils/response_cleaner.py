@@ -1,21 +1,9 @@
-from langchain_community.tools import DuckDuckGoSearchRun
-from langchain_experimental.tools.python.tool import PythonREPLTool
+import re
 
-class ToolManager:
-    """SRP: Responsible ONLY for creating tools."""
-
-    @staticmethod
-    def get_tools():
-        return [
-            DuckDuckGoSearchRun(name="web_search"),
-            PythonREPLTool(
-                name="python_interpreter",
-                description=(
-                    "A stateful Python REPL interpreter. "
-                    "Use for math, calculations, data analysis, unit conversion, plotting, etc. "
-                    "Always use print(...) for the final result. "
-                    "Environment has numpy, pandas, matplotlib, sympy."
-                ),
-                globals={"__builtins__": {}}  # security
-            )
-        ]
+def clean_response(text: str) -> str:
+    text = re.sub(r'^(Assistant:|AI:|Bot:)\s*', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'^(I am an AI|I am an artificial intelligence).*?How can I help you today\?', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'\n\d+\.\s*', '\n• ', text)
+    text = re.sub(r'^\d+\.\s*', '• ', text, flags=re.MULTILINE)
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    return text.strip()

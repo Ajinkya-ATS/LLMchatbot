@@ -4,16 +4,13 @@ import requests
 import os
 from dotenv import load_dotenv
 from datetime import datetime
+from services.chat_service import ChatService
+from config import PORT, OLLAMA_BASE_URL
 
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app)  # equivalent to app.use(cors())
-
-PORT = int(os.getenv("PORT", 5001))
-
-# Ollama API base URL
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
 
 AVAILABLE_MODELS = [
     {
@@ -77,82 +74,11 @@ def health_check():
         }), 500
 
 
-@app.route('/api/chat', methods=['POST'])
+@app.post('/api/chat')
 def chat():
     data = request.get_json()
-    message = data.get('message')
-    model = data.get('model')
-    conversation_history = data.get('conversationHistory', [])
-
-    if not message or not model:
-        return jsonify({"error": "Message and model are required"}), 400
-
-    try:
-        system_prompt = {
-            "role": "system",
-            "content": (
-                "You are a helpful AI assistant. Respond naturally and conversationally, "
-                "like a human would in a casual chat. Keep responses concise, friendly, "
-                "and conversational. Avoid excessive formatting, numbered lists, bullet points, "
-                "or markdown unless specifically requested. Just talk naturally like you would "
-                "to a friend."
-            )
-        }
-
-        messages = [
-            system_prompt,
-            *conversation_history,
-            {"role": "user", "content": message}
-        ]
-
-        resp = requests.post(
-            f"{OLLAMA_BASE_URL}/api/chat",
-            json={
-                "model": model,
-                "messages": messages,
-                "stream": False
-            },
-            timeout=120  # 2 minutes
-        )
-        resp.raise_for_status()
-
-        ollama_response = resp.json()
-        clean_response = ollama_response.get("message", {}).get("content", "")
-
-        # Clean up response - same logic as in JS
-        import re
-        clean_response = re.sub(r'^(Assistant:|AI:|Bot:)\s*', '', clean_response, flags=re.IGNORECASE)
-        clean_response = re.sub(
-            r'^(I am an AI|I am an artificial intelligence).*?How can I help you today\?',
-            '', clean_response, flags=re.IGNORECASE
-        )
-        clean_response = re.sub(r'\n\d+\.\s*', '\n• ', clean_response)
-        clean_response = re.sub(r'^\d+\.\s*', '• ', clean_response, flags=re.MULTILINE)
-        clean_response = re.sub(r'\n{3,}', '\n\n', clean_response)
-        clean_response = clean_response.strip()
-
-        return jsonify({
-            "response": clean_response,
-            "model": model,
-            "timestamp": datetime.utcnow().isoformat()
-        })
-
-    except requests.exceptions.ConnectionError:
-        return jsonify({
-            "error": "Cannot connect to Ollama. Please ensure Ollama is running and the model is available."
-        }), 500
-    except requests.exceptions.HTTPError as http_err:
-        if http_err.response.status_code == 404:
-            return jsonify({
-                "error": f"Model '{model}' not found. Please ensure the model is installed in Ollama."
-            }), 404
-        else:
-            return jsonify({
-                "error": http_err.response.json().get("error", "Ollama returned an error")
-            }), 500
-    except Exception as e:
-        print("Chat error:", str(e))
-        return jsonify({"error": "An error occurred while processing your request."}), 500
+    result = ChatService.handle_chat(data)
+    return jsonify(result)
 
 
 @app.route('/api/models/pull', methods=['POST'])
