@@ -138,6 +138,62 @@ To add support for additional models:
 
 ## Troubleshooting
 
+# Running Python Agents
+
+This guide explains how to run the Python agents locally.
+
+## Requirements
+- Python **3.12**
+- `pip` (included with Python)
+
+Check your Python version:
+
+```bash
+python3.12 --version
+```
+
+## Setup
+
+1. Navigate to the Python server directory:
+
+```bash
+cd python_server
+```
+
+2. Create a virtual environment:
+
+```bash
+python3.12 -m venv venv
+```
+
+3. Activate the virtual environment:
+
+**macOS / Linux**
+```bash
+source venv/bin/activate
+```
+
+**Windows**
+```bash
+venv\Scripts\activate
+```
+
+4. Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+## Running the Agent
+
+Start the Python server:
+
+```bash
+python app.py
+```
+
+The Python agents should now be running.
+
 ### Common Issues
 
 1. **"Cannot connect to Ollama"**
