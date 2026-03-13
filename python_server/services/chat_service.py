@@ -23,7 +23,7 @@ class ChatService:
             return {"error": "Message and model are required"}, 400
         
         mode = ChatService.router.get_mode(message, conversation_history)
-
+        print(mode) # Temporary print
         if mode == "grafcet": # Maybe we should replace it with 0,1,2 in future instead of raw strings
             return ChatService._handle_grafcet_mode(message, model, conversation_history)
         elif mode == "agentic":
