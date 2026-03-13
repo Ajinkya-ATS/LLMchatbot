@@ -1,4 +1,5 @@
 import re
+from typing import Optional
 
 def clean_response(text: str) -> str:
     text = re.sub(r'^(Assistant:|AI:|Bot:)\s*', '', text, flags=re.IGNORECASE)
@@ -7,3 +8,14 @@ def clean_response(text: str) -> str:
     text = re.sub(r'^\d+\.\s*', '• ', text, flags=re.MULTILINE)
     text = re.sub(r'\n{3,}', '\n\n', text)
     return text.strip()
+
+def mode_selection(text: str) -> Optional[str]:
+    text = text.strip().lower()
+    
+    pattern = r"(grafcet|agentic|normal)"
+    match = re.fullmatch(pattern, text)
+    
+    if match:
+        return match.group(1)
+    
+    return None
