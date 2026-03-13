@@ -54,3 +54,11 @@ class ChatService:
             }
         except Exception as e:
             return {"error": f"Agent error: {str(e)}"}, 501
+        
+    @staticmethod
+    def _handle_grafcet_mode(message, model, history):
+        pass
+
+    @staticmethod
+    def _handle_normal_mode(message, model, history):
+        pass
