@@ -1,11 +1,12 @@
 from flask import jsonify
-from datetime import datetime
 import requests
 from config import OLLAMA_BASE_URL
 from utils.response_cleaner import clean_response
+from utils.basic_utils import formatted_datetime
 from core.agent_manager import AgentManager
 from core.router import ModeRouter
 from prompts.grafcet_prompt import GRAFCET_SYSTEM_PROMPT
+from prompts.normal_prompt import NORMAL_PROMPT
 from langchain_core.messages import HumanMessage, AIMessage
 
 class ChatService:
@@ -60,6 +61,7 @@ class ChatService:
             return {
                 "response": clean,
                 "model": model,
+                "timestamp": formatted_datetime(),
                 "mode": "agent"
             }
         except Exception as e:
@@ -84,7 +86,8 @@ class ChatService:
             return {
                 "response": clean_response(content),
                 "model": model,
-                "mode": "normal"
+                "timestamp": formatted_datetime(),
+                "mode": "grafcet"
             }
         except Exception as e:
             return {"error": f"Normal chat error: {str(e)}"}, 502
@@ -92,7 +95,7 @@ class ChatService:
     @staticmethod
     def _handle_normal_mode(message, model, history):
         try:
-            messages = [{"role": "system", "content": "You are a helpful assistant."}]
+            messages = [{"role": "system", "content": NORMAL_PROMPT}]
             for item in history:
                 messages.append({"role": item.get("role"), "content": item.get("content")})
             messages.append({"role": "user", "content": message})
@@ -108,6 +111,7 @@ class ChatService:
             return {
                 "response": clean_response(content),
                 "model": model,
+                "timestamp": formatted_datetime(),
                 "mode": "normal"
             }
         except Exception as e:
