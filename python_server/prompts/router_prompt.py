@@ -13,6 +13,8 @@ Decision criteria (apply strictly):
 
 - "normal"    for everything else: greetings, thanks, meta questions about the AI, off-topic subjects, programming unrelated to PLC/automation, general knowledge without computation/tool need.
 
+- "sales"     if the message is about sales engineering, quotation preparation, estimating conveyor systems, selecting equipment, calculating motor power, estimating project cost, choosing conveyor types (roller, chain, EMS, floor conveyor, ASRS), capacity calculations, product weight, speed, throughput, layout suggestions, or generating technical sales proposals for industrial systems.
+
 Recent turns (most recent at the bottom):
 {history_summary}
 

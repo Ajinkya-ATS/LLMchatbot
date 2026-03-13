@@ -7,6 +7,7 @@ from core.agent_manager import AgentManager
 from core.router import ModeRouter
 from prompts.grafcet_prompt import GRAFCET_SYSTEM_PROMPT
 from prompts.normal_prompt import NORMAL_PROMPT
+from prompts.sales_prompt import SALES_SYSTEM_PROMPT
 from langchain_core.messages import HumanMessage, AIMessage
 
 class ChatService:
@@ -27,6 +28,8 @@ class ChatService:
         print(mode) # Temporary print
         if mode == "grafcet": # Maybe we should replace it with 0,1,2 in future instead of raw strings
             return ChatService._handle_grafcet_mode(message, model, conversation_history)
+        if mode == "sales":
+            return ChatService._handle_salse_mode(message, model, conversation_history)
         elif mode == "agentic":
             return ChatService._handle_agent_mode(message, model, conversation_history)
         else:
@@ -116,3 +119,28 @@ class ChatService:
             }
         except Exception as e:
             return {"error": f"Normal chat error: {str(e)}"}, 503
+       
+    def _handle_salse_mode(message, model, history):
+        try:
+            messages = [{"role": "system", "content": SALES_SYSTEM_PROMPT}]
+            for item in history:
+                messages.append({"role": item.get("role"), "content": item.get("content")})
+            messages.append({"role": "user", "content": message})
+ 
+            resp = requests.post(
+                f"{OLLAMA_BASE_URL}/api/chat",
+                json={"model": model, "messages": messages, "stream": False},
+                timeout=60
+            )
+            resp.raise_for_status()
+            content = resp.json()["message"]["content"]
+ 
+            return {
+                "response": clean_response(content),
+                "model": model,
+                "timestamp": formatted_datetime(),
+                "mode": "normal"
+            }
+        except Exception as e:
+            return {"error": f"Normal chat error: {str(e)}"}, 504
+ 
