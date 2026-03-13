@@ -4,11 +4,14 @@ import requests
 from config import OLLAMA_BASE_URL
 from utils.response_cleaner import clean_response
 from core.agent_manager import AgentManager
+from core.router import ModeRouter
+from prompts.grafcet_prompt import GRAFCET_SYSTEM_PROMPT
 from langchain_core.messages import HumanMessage, AIMessage
 
 class ChatService:
 
     agent_manager = AgentManager()
+    router = ModeRouter()
 
     @staticmethod
     def handle_chat(data: dict):
@@ -19,8 +22,15 @@ class ChatService:
         if not message or not model:
             return {"error": "Message and model are required"}, 400
         
-        return ChatService._handle_agent_mode(message, model, conversation_history) # Later, will let LLM decide weather to use tools or not
-    
+        mode = ChatService.router.get_mode(message, conversation_history)
+
+        if mode == "grafcet": # Maybe we should replace it with 0,1,2 in future instead of raw strings
+            return ChatService._handle_grafcet_mode(message, model, conversation_history)
+        elif mode == "agentic":
+            return ChatService._handle_agent_mode(message, model, conversation_history)
+        else:
+            return ChatService._handle_normal_mode(message, model, conversation_history)
+
     @staticmethod
     def _handle_agent_mode(message, model, history):
         try:
@@ -57,8 +67,48 @@ class ChatService:
         
     @staticmethod
     def _handle_grafcet_mode(message, model, history):
-        pass
+        try:
+            messages = [{"role": "system", "content": GRAFCET_SYSTEM_PROMPT}]
+            for item in history:
+                messages.append({"role": item.get("role"), "content": item.get("content")})
+            messages.append({"role": "user", "content": message})
+
+            resp = requests.post(
+                f"{OLLAMA_BASE_URL}/api/chat",
+                json={"model": model, "messages": messages, "stream": False},
+                timeout=60
+            )
+            resp.raise_for_status()
+            content = resp.json()["message"]["content"]
+
+            return {
+                "response": clean_response(content),
+                "model": model,
+                "mode": "normal"
+            }
+        except Exception as e:
+            return {"error": f"Normal chat error: {str(e)}"}, 502
 
     @staticmethod
     def _handle_normal_mode(message, model, history):
-        pass
+        try:
+            messages = [{"role": "system", "content": "You are a helpful assistant."}]
+            for item in history:
+                messages.append({"role": item.get("role"), "content": item.get("content")})
+            messages.append({"role": "user", "content": message})
+
+            resp = requests.post(
+                f"{OLLAMA_BASE_URL}/api/chat",
+                json={"model": model, "messages": messages, "stream": False},
+                timeout=60
+            )
+            resp.raise_for_status()
+            content = resp.json()["message"]["content"]
+
+            return {
+                "response": clean_response(content),
+                "model": model,
+                "mode": "normal"
+            }
+        except Exception as e:
+            return {"error": f"Normal chat error: {str(e)}"}, 503

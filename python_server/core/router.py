@@ -11,8 +11,8 @@ class ModeRouter: # Mode means, agentic, grafcet or simple
     @staticmethod
     def get_mode(message: str, history: list) -> str:
 
-        #Just taking last 4 messages in history
-        history_summary = "\n".join( f"{m.get('role', 'user')}: {m.get('content', '')[:140]}..." for m in history[-4:] ) or "No history."
+        #Just taking last 3 messages in history
+        history_summary = "\n".join( f"{m.get('role', 'user')}: {m.get('content', '')[:140]}..." for m in history[-3:] ) or "No history."
 
         # directly hit ollama
         payload = {
