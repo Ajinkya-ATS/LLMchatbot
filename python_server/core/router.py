@@ -4,7 +4,7 @@ from langchain_ollama import ChatOllama
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
 from config import OLLAMA_BASE_URL
-from prompts.router_prompt import ROUTER_PROMPT
+from python_server.prompts.mode_selection_prompt import MODE_SELECTION_PROMPT
 
 class ModeRouter: # Mode means, agentic, grafcet or simple
     
@@ -18,7 +18,7 @@ class ModeRouter: # Mode means, agentic, grafcet or simple
         payload = {
             "model": "mistral:latest",          # or tiny fast model
             "messages": [
-                {"role": "user", "content": ROUTER_PROMPT.format(
+                {"role": "user", "content": MODE_SELECTION_PROMPT.format(
                     history_summary=history_summary,
                     message=message
                 )}

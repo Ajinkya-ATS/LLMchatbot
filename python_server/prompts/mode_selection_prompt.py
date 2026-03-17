@@ -1,4 +1,4 @@
-ROUTER_PROMPT = """
+MODE_SELECTION_PROMPT = """
 You are an intent router. You MUST output EXACTLY ONE of these three lowercase words and nothing else — no explanation, no punctuation, no prefix, no suffix, no newline after the word:
 
 grafcet
