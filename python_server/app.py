@@ -6,6 +6,8 @@ from dotenv import load_dotenv
 from datetime import datetime
 from services.chat_service import ChatService
 from config import PORT, OLLAMA_BASE_URL
+import uuid
+from werkzeug.utils import secure_filename
 
 load_dotenv()
 
@@ -50,6 +52,20 @@ AVAILABLE_MODELS = [
     }
 ]
 
+# File upload configuration
+UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads')
+ALLOWED_EXTENSIONS = {'csv', 'pdf'}
+MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+
+# Create uploads folder if it doesn't exist
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = MAX_FILE_SIZE
+
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
 
 @app.route('/api/models', methods=['GET'])
 def get_models():
@@ -79,6 +95,44 @@ def chat():
     data = request.get_json()
     result = ChatService.handle_chat(data)
     return jsonify(result)
+
+
+@app.route('/api/upload', methods=['POST'])
+def upload_file():
+    try:
+        # Check if file is in request
+        if 'file' not in request.files:
+            return jsonify({"error": "No file part"}), 400
+        
+        file = request.files['file']
+        
+        if file.filename == '':
+            return jsonify({"error": "No selected file"}), 400
+        
+        if not allowed_file(file.filename):
+            return jsonify({"error": "Only CSV and PDF files are allowed"}), 400
+        
+        # Generate unique filename
+        filename = secure_filename(file.filename)
+        file_id = str(uuid.uuid4())
+        ext = filename.rsplit('.', 1)[1].lower()
+        unique_filename = f"{file_id}.{ext}"
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+        
+        # Save file
+        file.save(filepath)
+        
+        return jsonify({
+            "status": "success",
+            "fileId": file_id,
+            "fileName": filename,
+            "filePath": filepath,
+            "fileType": file.content_type
+        }), 200
+    
+    except Exception as e:
+        print(f"Upload error: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route('/api/models/pull', methods=['POST'])

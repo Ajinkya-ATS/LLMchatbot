@@ -78,7 +78,7 @@ class ChatService:
             resp = requests.post(
                 f"{OLLAMA_BASE_URL}/api/chat",
                 json={"model": model, "messages": messages, "stream": False},
-                timeout=60
+                timeout=600
             )
             resp.raise_for_status()
             content = resp.json()["message"]["content"]
@@ -103,7 +103,7 @@ class ChatService:
             resp = requests.post(
                 f"{OLLAMA_BASE_URL}/api/chat",
                 json={"model": model, "messages": messages, "stream": False},
-                timeout=60
+                timeout=600
             )
             resp.raise_for_status()
             content = resp.json()["message"]["content"]
