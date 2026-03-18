@@ -133,6 +133,8 @@ def upload_file():
                 # Store to vector DB with file_id as collection name
                 vector_store.store_to_vector_db(file_id, filepath)
                 print(f"File {file_id} processed and stored in vector DB")
+            elif ext == "csv":
+                pass
         except Exception as e:
             print(f"Warning: Failed to process embeddings for {file_id}: {str(e)}")
             # Still return success for upload, just warn about embeddings

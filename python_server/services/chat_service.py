@@ -3,16 +3,19 @@ import requests
 from config import OLLAMA_BASE_URL
 from utils.response_cleaner import clean_response
 from utils.basic_utils import formatted_datetime
-from core.agent_manager import AgentManager
+from core.agent_manager import AgenticMode, CSVAgent
 from core.router import Router
 from prompts.grafcet_prompt import GRAFCET_SYSTEM_PROMPT
 from prompts.normal_prompt import NORMAL_PROMPT
 from langchain_core.messages import HumanMessage, AIMessage
+import os
+import pandas as pd
 
 class ChatService:
 
-    agent_manager = AgentManager()
+    agent_manager = AgenticMode()
     router = Router()
+    csv_agent = CSVAgent()
     vector_store = None  # Will be initialized in app.py
 
     @staticmethod
@@ -21,26 +24,19 @@ class ChatService:
         model = data.get("model")
         conversation_history = data.get("conversationHistory", [])
         uploaded_file = data.get("uploadedFile", None)
-
+        print(uploaded_file)
         if not message or not model:
             return {"error": "Message and model are required"}, 400
         
         retrieved_items = []
-        
         # First, retrieve documents if a file was uploaded
         if uploaded_file and ChatService.vector_store:
-            try:
-                file_id = uploaded_file.get("fileId")
-                if file_id:
-                    retrieved_items = ChatService.vector_store.retrieve(
-                        query=message,
-                        collection_name=file_id,
-                        k=5
-                    )
-                    print(f"Retrieved {len(retrieved_items)} items from vector DB")
-            except Exception as e:
-                print(f"RAG retrieval error: {str(e)}")
-                retrieved_items = []
+            file_type = os.path.splitext(uploaded_file.get("fileName"))[1]
+            file_id = uploaded_file.get("fileId")
+            if file_type == ".csv":
+                retrieved_items = ChatService._handle_csv_agent(message=message, model=model, file_id=file_id)
+            elif file_type == ".pdf":
+                retrieved_items = ChatService._handle_pdf_rag(message=message, file_id=file_id)
         
         # Now get mode with RAG context awareness
         mode = ChatService.router.get_mode(message, conversation_history, retrieved_items)
@@ -162,3 +158,25 @@ class ChatService:
             }
         except Exception as e:
             return {"error": f"Normal chat error: {str(e)}"}, 503
+        
+    @staticmethod
+    def _handle_csv_agent(message, model, file_id):
+        df = pd.read_csv(f'uploads/{file_id}.csv')
+        if ChatService.csv_agent.create_pandas_agent(model, df):
+            results = ChatService.csv_agent.execute_query(message)
+            return results
+        return []
+
+    @staticmethod
+    def _handle_pdf_rag(message, file_id):
+        try:
+            if file_id:
+                retrieved_items = ChatService.vector_store.retrieve(
+                    query=message,
+                    collection_name=file_id,
+                    k=5 
+                )
+                print(f"Retrieved {len(retrieved_items)} items from vector DB")
+        except Exception as e:
+            print(f"RAG retrieval error: {str(e)}")
+            retrieved_items = []
