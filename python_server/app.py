@@ -5,6 +5,7 @@ import os
 from dotenv import load_dotenv
 from datetime import datetime
 from services.chat_service import ChatService
+from services.vector_db_service import VectorStore
 from config import PORT, OLLAMA_BASE_URL
 import uuid
 from werkzeug.utils import secure_filename
@@ -14,10 +15,14 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)  # equivalent to app.use(cors())
 
+# Initialize VectorStore for embeddings
+vector_store = VectorStore()
+print("VectorStore initialized - Embedding models loaded")
+
 AVAILABLE_MODELS = [
     {
         "id": "gpt-oss-20b",
-        "name": "gpt-oss:20b",
+        "name": "gpt-oss:120b-cloud ",
         "size": "13 GB",
         "modified": "1 day ago",
         "description": "GPT-OSS 20B model - Large open source language model"
@@ -122,6 +127,16 @@ def upload_file():
         # Save file
         file.save(filepath)
         
+        # Process and store embeddings if it's a PDF
+        try:
+            if ext == 'pdf':
+                # Store to vector DB with file_id as collection name
+                vector_store.store_to_vector_db(file_id, filepath)
+                print(f"File {file_id} processed and stored in vector DB")
+        except Exception as e:
+            print(f"Warning: Failed to process embeddings for {file_id}: {str(e)}")
+            # Still return success for upload, just warn about embeddings
+        
         return jsonify({
             "status": "success",
             "fileId": file_id,
@@ -164,6 +179,9 @@ def pull_model():
 
 
 if __name__ == '__main__':
+    # Initialize ChatService with vector store
+    ChatService.vector_store = vector_store
+    
     print(f"Server running on port {PORT}")
     print(f"Ollama base URL: {OLLAMA_BASE_URL}")
     app.run(host='0.0.0.0', port=PORT, debug=False, threaded=True)

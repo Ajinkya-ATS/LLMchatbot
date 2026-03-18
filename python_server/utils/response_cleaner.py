@@ -19,3 +19,6 @@ def mode_selection(text: str) -> Optional[str]:
         return match.group(1)
     
     return None
+
+def boolean_filter(text: str) -> bool:
+    return "true" in text.lower()

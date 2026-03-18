@@ -143,7 +143,7 @@ const ChatInterface = ({ selectedModel, isConnected, onToggleModelSelector, show
       }
 
       setMessages(prev => [...prev, assistantMessage]);
-      setUploadedFile(null); // Clear uploaded file after sending
+      // setUploadedFile(null); // Clear uploaded file after sending
     } catch (error) {
       console.error('Error sending message:', error);
 
@@ -172,6 +172,7 @@ const ChatInterface = ({ selectedModel, isConnected, onToggleModelSelector, show
 
   const clearChat = () => {
     setMessages([]);
+    setUploadedFile(null);
     setError(null);
   };
 

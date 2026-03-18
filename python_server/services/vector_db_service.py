@@ -25,7 +25,7 @@ class Embedder:
         return embs
 
     def encode_query(self, query):
-        return self.embedder.encode(query) # Returns a tensor
+        return self.embedder.encode(query, normalize_embeddings=True).tolist()
     
     def get_vector_dim(self):
         return self.embedder.get_sentence_embedding_dimension()
@@ -73,7 +73,7 @@ class VectorStore:
         self.embedder = Embedder()
 
     def store_to_vector_db(self, collection_name, pdf_path):
-        if not self._collection_exists():
+        if not self._collection_exists(collection_name):
             self._create_collection(collection_name)
         chunks = Chunker.extract_and_chunk(pdf_path)
         encodings = self.embedder.encode_chunks(chunks)
@@ -93,17 +93,19 @@ class VectorStore:
     def retrieve(self, query, collection_name, k = 5):
         if not self._collection_exists(collection_name):
             print("No such collection exists")
-            return False
+            return []
+        
+        query_vector = self.embedder.encode_query(query)
         
         response: QueryResponse = self.client.query_points(
             collection_name=collection_name,
-            query=query,
+            query=query_vector,
             limit=k,
             with_payload=True,
         )
 
         results = []
-        for data in response.result:
+        for data in response.points:
             text = data.payload.get("text")
             if text:
                 results.append(text)
