@@ -12,7 +12,7 @@ QDRANT_URL = "http://localhost:6333"
 
 class Embedder:
     def __init__(self):
-        self.embedder = SentenceTransformer("all-MiniLM-L6-v2")
+        self.embedder = SentenceTransformer("BAAI/bge-small-en-v1.5")
 
     def encode_chunks(self, chunks):
         texts = [c["text"] for c in chunks]
