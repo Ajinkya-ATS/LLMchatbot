@@ -1,4 +1,4 @@
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import SentenceTransformer, CrossEncoder
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct, QueryResponse
 from pathlib import Path
@@ -9,6 +9,7 @@ CHUNK_SIZE = 512
 CHUNK_OVERLAP = 100
 BATCH_SIZE = 32
 QDRANT_URL = "http://localhost:6333"
+DENSE_SEARCH_LIMIT = 70
 
 class Embedder:
     def __init__(self):
@@ -71,6 +72,7 @@ class VectorStore:
     def __init__(self,):
         self.client = QdrantClient(url=QDRANT_URL, timeout=60)
         self.embedder = Embedder()
+        self.cross_encoder = CrossEncoder("BAAI/bge-reranker-base")
 
     def store_to_vector_db(self, collection_name, pdf_path):
         if not self._collection_exists(collection_name):
@@ -97,20 +99,37 @@ class VectorStore:
         
         query_vector = self.embedder.encode_query(query)
         
+        # This is retrival step (Dense Search), I did not add sparse search as of now
         response: QueryResponse = self.client.query_points(
             collection_name=collection_name,
             query=query_vector,
-            limit=k,
+            limit=DENSE_SEARCH_LIMIT,
             with_payload=True,
         )
 
-        results = []
-        for data in response.points:
-            text = data.payload.get("text")
+        dense_results = []
+        for point in response.points:
+            text = point.payload.get("text")
             if text:
-                results.append(text)
-                
-        return results
+                dense_results.append(point.payload)
+
+        pairs = [[query, doc["text"]] for doc in dense_results] 
+        rerank_scores = self.cross_encoder.predict(pairs)
+
+        for result, score in zip(dense_results, rerank_scores):
+            result["rerank_score"] = float(score)
+
+        dense_results.sort(key=lambda x: x["rerank_score"], reverse=True)
+
+        top_k_results = []
+        for result in dense_results[:k]:
+            top_k_results.append({
+                "text": result.get("text"),
+                "score": result.get("rerank_score"),
+                "page": result.get("page"),
+                "source": result.get("source")
+            })
+        return top_k_results
 
     def _create_collection(self, collection_name) -> bool:
         vector_dim = self.embedder.get_vector_dim()
