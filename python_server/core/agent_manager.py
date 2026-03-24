@@ -61,7 +61,8 @@ class AgenticMode:
         llm = ChatOllama(
             model=model,
             temperature=0,
-            base_url=OLLAMA_BASE_URL
+            top_k=40,
+            repeat_penalty=1.2
         )
         tools = ToolManager.get_tools()
         prompt = PromptManager.get_react_prompt()
@@ -73,6 +74,6 @@ class AgenticMode:
             verbose=True,
             max_iterations=10,  # Prevent infinite loops
             early_stopping_method="force",  # Force stop after max iterations
-            handle_parsing_errors=True,  # Handle malformed model outputs
+            handle_parsing_errors="output_fixing",  # Handle malformed model outputs
         )
         return executor
