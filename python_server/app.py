@@ -12,6 +12,7 @@ import uuid
 from werkzeug.utils import secure_filename
 from models import UploadedFile, db
 from flask_sqlalchemy import SQLAlchemy
+from utils.basic_utils import compute_file_hash
 
 load_dotenv()
 
@@ -123,6 +124,18 @@ def upload_file():
         if not allowed_file(file.filename):
             return jsonify({"error": "Only CSV and PDF files are allowed"}), 400
         
+        file_hash = compute_file_hash(file)
+        existing_file = UploadedFile.query.filter_by(file_hash=file_hash).first()
+        
+        if existing_file:
+            return jsonify({
+                "status": "duplicate",
+                "fileId": existing_file.file_id,
+                "fileName": existing_file.original_filename,
+                "filePath": existing_file.file_path,
+                "fileType": existing_file.file_type
+            }), 200
+
         # Generate unique filename
         filename = secure_filename(file.filename)
         file_id = str(uuid.uuid4())
@@ -133,6 +146,16 @@ def upload_file():
         # Save file
         file.save(filepath)
         
+        new_file = UploadedFile(
+            file_id=file_id,
+            original_filename=filename,
+            file_hash=file_hash,
+            file_type=ext,
+            file_path=filepath
+        )
+        db.session.add(new_file)
+        db.session.commit()
+
         # Process and store embeddings if it's a PDF
         try:
             if ext == 'pdf':

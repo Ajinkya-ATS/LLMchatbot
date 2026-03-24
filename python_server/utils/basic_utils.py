@@ -1,4 +1,5 @@
 from datetime import datetime
+import hashlib
 
 def formatted_datetime():
     now = datetime.now()
@@ -35,3 +36,14 @@ def build_context(retrieved_items):
         context_chunks.append(chunk.strip())
 
     return "\n\n".join(context_chunks)
+
+
+def compute_file_hash(file_stream):
+    file_stream.seek(0)
+    hash_sha256 = hashlib.sha256()
+
+    for chunk in iter(lambda: file_stream.read(4096), b""):
+        hash_sha256.update(chunk)
+
+    file_stream.seek(0)
+    return hash_sha256.hexdigest()
