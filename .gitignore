@@ -1,6 +1,8 @@
 node_modules/
 venv/
+migrations/
 .env
+.flaskenv
 .DS_Store
 __pycache__/
 *.pyc

@@ -5,10 +5,13 @@ import os
 from dotenv import load_dotenv
 from datetime import datetime
 from services.chat_service import ChatService
+from flask_migrate import Migrate
 from services.vector_db_service import VectorStore
 from config import PORT, OLLAMA_BASE_URL
 import uuid
 from werkzeug.utils import secure_filename
+from models import UploadedFile, db
+from flask_sqlalchemy import SQLAlchemy
 
 load_dotenv()
 
@@ -18,6 +21,9 @@ CORS(app)  # equivalent to app.use(cors())
 # Initialize VectorStore for embeddings
 vector_store = VectorStore()
 print("VectorStore initialized - Embedding models loaded")
+app.config.from_object('config.SQLConfig')
+db.init_app(app)
+migrate = Migrate(app, db) # To enable flask db commands
 
 AVAILABLE_MODELS = [
     {
