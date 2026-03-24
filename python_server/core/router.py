@@ -7,6 +7,7 @@ from langchain_core.output_parsers import JsonOutputParser
 from config import OLLAMA_BASE_URL
 from prompts.mode_selection_prompt import MODE_SELECTION_PROMPT
 from prompts.rag_eligibility_checker_prompt import RAG_ELIGIBILITY_PROMPT
+from prompts.csv_agent_eligibility import CSV_AGENT_ELIGIBILITY
 
 
 ROUTER_MODEL = "gpt-oss:120b-cloud"
@@ -79,6 +80,37 @@ class Router: # Mode means, agentic, grafcet or simple
             text = r.json()["message"]["content"].strip()
             return boolean_filter(text)
         
+        except Exception as e:
+            print(f"Router error: {e}") # For now
+            return False
+        
+    @staticmethod
+    def _csv_router(message, model, conversation_history):
+        # Only took user to prevent model miss-prediction
+        history_summary = "\n".join( f"{m.get('role', 'user')}: {m.get('content', '')[:140]}..." for m in conversation_history[-3:] ) or "No history."
+
+        payload = {
+            "model": model, # or tiny fast model
+            "messages": [
+                {"role": "user", "content": CSV_AGENT_ELIGIBILITY.format(
+                    query=message,
+                    history=history_summary
+                )}
+            ],
+            "stream": False,
+            "options": {"temperature": 0.0}
+        }
+
+        try:
+            r = requests.post(f"{OLLAMA_BASE_URL}/api/chat", json=payload, timeout=600)
+            r.raise_for_status() # Break if HTTP failed
+            text = r.json()["message"]["content"].strip()
+            use_csv_agent = boolean_filter(text)
+            if (use_csv_agent is not None):
+                return use_csv_agent
+            else:
+                return False
+
         except Exception as e:
             print(f"Router error: {e}") # For now
             return False

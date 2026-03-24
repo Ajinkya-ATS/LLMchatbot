@@ -8,7 +8,6 @@ from core.router import Router
 from prompts.grafcet_prompt import GRAFCET_SYSTEM_PROMPT
 from prompts.normal_prompt import NORMAL_PROMPT
 from prompts.csv_rag_prompt import CSV_RAG_PROMPT
-from prompts.csv_agent_eligibility import CSV_AGENT_ELIGIBILITY
 from prompts.rag_pdf_prompt import RAG_PDF_PROMPT
 from langchain_core.messages import HumanMessage, AIMessage
 import os
@@ -162,7 +161,7 @@ class ChatService:
             return ChatService._generate_csv_response(
                 message, model, conversation_history, file_path
             )
-        if ChatService._csv_router(message, model, conversation_history):
+        if ChatService.router._csv_router(message, model, conversation_history):
             return ChatService._generate_csv_response(
                 message, model, conversation_history, file_path
             )
@@ -170,37 +169,6 @@ class ChatService:
         return ChatService._generate_response(
                 message, model, conversation_history
             )
-
-    @staticmethod
-    def _csv_router(message, model, conversation_history):
-        # Only took user to prevent model miss-prediction
-        history_summary = "\n".join( f"{m.get('role', 'user')}: {m.get('content', '')[:140]}..." for m in conversation_history[-3:] ) or "No history."
-
-        payload = {
-            "model": model, # or tiny fast model
-            "messages": [
-                {"role": "user", "content": CSV_AGENT_ELIGIBILITY.format(
-                    query=message,
-                    history=history_summary
-                )}
-            ],
-            "stream": False,
-            "options": {"temperature": 0.0}
-        }
-
-        try:
-            r = requests.post(f"{OLLAMA_BASE_URL}/api/chat", json=payload, timeout=600)
-            r.raise_for_status() # Break if HTTP failed
-            text = r.json()["message"]["content"].strip()
-            use_csv_agent = boolean_filter(text)
-            if (use_csv_agent is not None):
-                return use_csv_agent
-            else:
-                return False
-
-        except Exception as e:
-            print(f"Router error: {e}") # For now
-            return False
 
     @staticmethod
     def _generate_csv_response(message, model, conversation_history, file_path):
