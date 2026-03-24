@@ -92,11 +92,11 @@ class VectorStore:
         self.client.upsert(collection_name, points=data, wait=True)
         return True
 
-    def retrieve(self, query, collection_name, k = 5):
+    def retrieve(self, query, query_history,collection_name, k = 5):
         if not self._collection_exists(collection_name):
             print("No such collection exists")
             return []
-        
+            
         query_vector = self.embedder.encode_query(query)
         
         # This is retrival step (Dense Search), I did not add sparse search as of now
@@ -113,7 +113,25 @@ class VectorStore:
             if text:
                 dense_results.append(point.payload)
 
-        pairs = [[query, doc["text"]] for doc in dense_results] 
+        # Just giving some context to RAG
+        user_queries = [
+                msg["content"]
+                for msg in query_history[-3:]
+                if msg["role"] == "user"
+            ]
+        current_query = query
+
+        history_block = "\n".join(
+            [f"Past query {i+1}: {q}" for i, q in enumerate(user_queries)]
+        )
+
+        contextual_query = f"""
+        {history_block}
+
+        Current query: {current_query}
+        """.strip()
+
+        pairs = [[contextual_query, doc["text"]] for doc in dense_results] 
         rerank_scores = self.cross_encoder.predict(pairs)
 
         for result, score in zip(dense_results, rerank_scores):
@@ -129,6 +147,7 @@ class VectorStore:
                 "page": result.get("page"),
                 "source": result.get("source")
             })
+        print("Fetched top k results")
         return top_k_results
 
     def _create_collection(self, collection_name) -> bool:

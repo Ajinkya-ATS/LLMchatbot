@@ -1,5 +1,6 @@
 import requests
 from utils.response_cleaner import mode_selection, boolean_filter
+from utils.basic_utils import build_context
 from langchain_ollama import ChatOllama
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
@@ -39,7 +40,7 @@ class Router: # Mode means, agentic, grafcet or simple
         }
 
         try:
-            r = requests.post(f"{OLLAMA_BASE_URL}/api/chat", json=payload, timeout=15)
+            r = requests.post(f"{OLLAMA_BASE_URL}/api/chat", json=payload, timeout=600)
             r.raise_for_status() # Break if HTTP failed
             text = r.json()["message"]["content"].strip()
             match = mode_selection(text)
@@ -53,16 +54,17 @@ class Router: # Mode means, agentic, grafcet or simple
             return "normal"
         
     @staticmethod
-    def check_rag_eligibility(message: str, history: list, retrieved_items) -> bool:
+    def check_pdf_rag_eligibility(message: str, history: list, retrieved_items) -> bool:
 
         #Just taking last 3 messages in history
         history_summary = "\n".join( f"{m.get('role', 'user')}: {m.get('content', '')[:140]}..." for m in history[-3:] ) or "No history."
+        retrieved_items_str = build_context(retrieved_items)
 
         payload = {
             "model": ROUTER_MODEL, # or tiny fast model
             "messages": [
                 {"role": "user", "content": RAG_ELIGIBILITY_PROMPT.format(
-                    retrieved_items=retrieved_items,
+                    retrieved_items=retrieved_items_str,
                     history_summary=history_summary,
                     message=message
                 )}
@@ -72,7 +74,7 @@ class Router: # Mode means, agentic, grafcet or simple
         }
 
         try:
-            r = requests.post(f"{OLLAMA_BASE_URL}/api/chat", json=payload, timeout=15)
+            r = requests.post(f"{OLLAMA_BASE_URL}/api/chat", json=payload, timeout=600)
             r.raise_for_status() # Break if HTTP failed
             text = r.json()["message"]["content"].strip()
             return boolean_filter(text)

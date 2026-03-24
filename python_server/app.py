@@ -21,11 +21,11 @@ print("VectorStore initialized - Embedding models loaded")
 
 AVAILABLE_MODELS = [
     {
-        "id": "gpt-oss-20b",
-        "name": "gpt-oss:120b-cloud ",
-        "size": "13 GB",
+        "id": "mistral",
+        "name": "mistral-large-3:675b-cloud",
+        "size": "500 GB",
         "modified": "1 day ago",
-        "description": "GPT-OSS 20B model - Large open source language model"
+        "description": "Powerful mistral model"
     },
     {
         "id": "15cb39fd9394",
@@ -36,10 +36,10 @@ AVAILABLE_MODELS = [
     },
     {
         "id": "dae161e27b0e",
-        "name": "qwen2.5-coder:7b",
-        "size": "4.7 GB",
+        "name": "kimi-k2.5:cloud",
+        "size": "1 TB",
         "modified": "2 months ago",
-        "description": "Qwen2.5 Coder model optimized for programming tasks"
+        "description": "Kimi-k2 model"
     },
     {
         "id": "6995872bfe4c",

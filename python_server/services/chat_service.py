@@ -2,13 +2,14 @@ from flask import jsonify
 import requests
 from config import OLLAMA_BASE_URL
 from utils.response_cleaner import clean_response, boolean_filter
-from utils.basic_utils import formatted_datetime
+from utils.basic_utils import formatted_datetime, format_history, build_context
 from core.agent_manager import AgenticMode, CSVAgent
 from core.router import Router
 from prompts.grafcet_prompt import GRAFCET_SYSTEM_PROMPT
 from prompts.normal_prompt import NORMAL_PROMPT
 from prompts.csv_rag_prompt import CSV_RAG_PROMPT
 from prompts.csv_agent_eligibility import CSV_AGENT_ELIGIBILITY
+from prompts.rag_pdf_prompt import RAG_PDF_PROMPT
 from langchain_core.messages import HumanMessage, AIMessage
 import os
 import pandas as pd
@@ -172,6 +173,7 @@ class ChatService:
 
     @staticmethod
     def _csv_router(message, model, conversation_history):
+        # Only took user to prevent model miss-prediction
         history_summary = "\n".join( f"{m.get('role', 'user')}: {m.get('content', '')[:140]}..." for m in conversation_history[-3:] ) or "No history."
 
         payload = {
@@ -187,7 +189,7 @@ class ChatService:
         }
 
         try:
-            r = requests.post(f"{OLLAMA_BASE_URL}/api/chat", json=payload, timeout=15)
+            r = requests.post(f"{OLLAMA_BASE_URL}/api/chat", json=payload, timeout=600)
             r.raise_for_status() # Break if HTTP failed
             text = r.json()["message"]["content"].strip()
             use_csv_agent = boolean_filter(text)
@@ -202,57 +204,118 @@ class ChatService:
 
     @staticmethod
     def _generate_csv_response(message, model, conversation_history, file_path):
-        df = pd.read_csv(file_path)
-        results = None
-        if ChatService.csv_agent.create_pandas_agent(model, df):
-            results = ChatService.csv_agent.execute_query(message)
-            print("Using csv agent")
-            context=str(results) if results else "No relevant data found"
-            print(context)
-            messages = []
+        try:
+            df = pd.read_csv(file_path)
+            results = None
+            if ChatService.csv_agent.create_pandas_agent(model, df):
+                results = ChatService.csv_agent.execute_query(message)
+                print("Using csv agent")
+                context=str(results) if results else "No relevant data found"
+                print(context)
+                messages = []
 
-            for item in conversation_history:
+                for item in conversation_history:
+                    messages.append({
+                        "role": item.get("role"),
+                        "content": item.get("content")
+                    })
+
                 messages.append({
-                    "role": item.get("role"),
-                    "content": item.get("content")
+                    "role": "user",
+                    "content": CSV_RAG_PROMPT.format(
+                        query=message,
+                        context=context
+                    )
                 })
 
-            messages.append({
-                "role": "user",
-                "content": CSV_RAG_PROMPT.format(
-                    query=message,
-                    context=context
+                resp = requests.post(
+                    f"{OLLAMA_BASE_URL}/api/chat",
+                    json={"model": model, "messages": messages, "stream": False},
+                    timeout=600
                 )
-            })
-
-            resp = requests.post(
-                f"{OLLAMA_BASE_URL}/api/chat",
-                json={"model": model, "messages": messages, "stream": False},
-                timeout=600
-            )
-            resp.raise_for_status()
-            content = resp.json()["message"]["content"]
-            return {
-                "response": clean_response(content),
-                "model": model,
-                "timestamp": formatted_datetime(),
-                "mode": "csv_rag"
-            }
-        return ChatService._generate_response(
+                resp.raise_for_status()
+                content = resp.json()["message"]["content"]
+                return {
+                    "response": clean_response(content),
+                    "model": model,
+                    "timestamp": formatted_datetime(),
+                    "mode": "csv_rag"
+                }
+            return ChatService._generate_response(
+                    message, model, conversation_history
+                )
+        except Exception as e:
+            print(f"CSV error: {str(e)}")
+            return ChatService._generate_response(
                 message, model, conversation_history
-            ) 
+            )
+    
+    @staticmethod
+    def _generate_pdf_response(message, model, conversation_history, retrieved_items):
+        history_str = format_history(conversation_history, k=3)
+        retrieved_items_str = build_context(retrieved_items)
+        print(retrieved_items_str)
+        payload = {
+            "model": model, # or tiny fast model
+            "messages": [
+                {"role": "user", "content": RAG_PDF_PROMPT.format(
+                    query=message,
+                    history=history_str,
+                    context = retrieved_items_str
+                )}
+            ],
+            "stream": False,
+            "options": {"temperature": 0.0}
+        }
+
+        resp = requests.post(
+            f"{OLLAMA_BASE_URL}/api/chat",
+            json=payload,
+            timeout=600
+        )
+        resp.raise_for_status()
+        content = resp.json()["message"]["content"]
+
+        return {
+            "response": clean_response(content),
+            "model": model,
+            "timestamp": formatted_datetime(),
+            "mode": "rag_pdf"
+        }
 
     @staticmethod
-    def _handle_pdf_rag(message, file_id):
+    def _handle_pdf_rag(message, model, conversation_history, file_id):
         try:
             if file_id:
                 retrieved_items = ChatService.vector_store.retrieve(
                     query=message,
+                    query_history = conversation_history,
                     collection_name=file_id,
-                    k=5 
+                    k=5
                 )
-                print(f"Retrieved {len(retrieved_items)} items from vector DB")
-                return retrieved_items
+                max_score = 0
+                if retrieved_items:
+                    max_score = max(item["score"] for item in retrieved_items if item["score"] is not None)
+                    if max_score > 0.30:
+                        print("Using RAG Based of similarity score")
+                        return ChatService._generate_pdf_response(
+                            message, model, conversation_history, retrieved_items
+                        )
+                    elif ChatService.router.check_pdf_rag_eligibility(message, conversation_history, retrieved_items):
+                        print("Using RAG after LLM determined its needed")
+                        return ChatService._generate_pdf_response(
+                            message, model, conversation_history, retrieved_items
+                        )
+                    print(max_score)
+                    print("Using normal mode because of low similarity score")
+                
+                print("Using Normal Mode")
+                return ChatService._generate_response(
+                    message, model, conversation_history
+                )
+
         except Exception as e:
             print(f"RAG retrieval error: {str(e)}")
-            retrieved_items = []
+            return ChatService._generate_response(
+                message, model, conversation_history
+            )
