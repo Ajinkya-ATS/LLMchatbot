@@ -89,7 +89,12 @@ class VectorStore:
                     **chunk["metadata"],
                 }
             ))
-        self.client.upsert(collection_name, points=data, wait=True)
+        for i in range(0, len(data), 100):
+            self.client.upsert(
+                collection_name,
+                points=data[i:i+100],
+                wait=True
+            )
         return True
 
     def retrieve(self, query, query_history,collection_name, k = 5):
