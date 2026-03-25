@@ -191,6 +191,28 @@ Start the Python server:
 ```bash
 python app.py
 ```
+### Setup and Database Initialization
+
+Run the application containers in detached mode:
+
+```bash
+docker-compose up -d
+```
+
+Create a new database named LLMDB using your preferred SQL client or CLI.
+Then initialize and apply Flask database migrations:
+
+Create a .env file and add the following string into it:
+```bash
+DATABASE_URL=mssql+pyodbc://sa:YourStrongPassword123!@localhost:1433/LLMDB?driver=ODBC+Driver+17+for+SQL+Server&TrustServerCertificate=yes
+```
+
+```bash
+flask db init
+flask db migrate -m "initial"
+flask db upgrade
+```
+
 
 The Python agents should now be running.
 
