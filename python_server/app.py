@@ -11,7 +11,6 @@ from config import PORT, OLLAMA_BASE_URL
 import uuid
 from werkzeug.utils import secure_filename
 from models import UploadedFile, db
-from flask_sqlalchemy import SQLAlchemy
 from utils.basic_utils import compute_file_hash
 
 load_dotenv()
