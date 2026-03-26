@@ -58,20 +58,27 @@ class ChatService:
         return handler(message, model, conversation_history)
 
     def _handle_uploaded_file(self, message: str, model: str, 
-                            conversation_history: list, uploaded_file: dict):
+                          conversation_history: list, uploaded_file: dict):
         file_type = uploaded_file.get("fileType")
         file_id = uploaded_file.get("fileId")
 
         if not file_id:
             return self._handle_text_only_chat(message, model, conversation_history)
 
-        if file_type in [".csv", "text/csv"]:
-            return self._csv_router(message, model, conversation_history, file_id)
-        
-        elif file_type in [".pdf", "text/pdf"]:
-            if not self.vector_store:
-                return self._handle_text_only_chat(message, model, conversation_history)
-            return self._pdf_router(message, model, conversation_history, file_id)
+        routers = {
+            ".csv": self._csv_router,
+            "text/csv": self._csv_router,
+            ".pdf": self._pdf_router,
+            "text/pdf": self._pdf_router,
+        }
+
+        router = routers.get(file_type)
+
+        if router == self._pdf_router and not self.vector_store:
+            return self._handle_text_only_chat(message, model, conversation_history)
+
+        if router:
+            return router(message, model, conversation_history, file_id)
 
         return self._handle_text_only_chat(message, model, conversation_history)
 
