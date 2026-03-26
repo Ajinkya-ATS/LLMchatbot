@@ -12,10 +12,29 @@ QDRANT_URL = "http://localhost:6333"
 DENSE_SEARCH_LIMIT = 70
 
 class Embedder:
+    """
+    Wrapper around SentenceTransformer for:
+        - embedding document chunks
+        - embedding user queries
+        - exposing embedding dimensionality
+    """
     def __init__(self):
+        """
+        Initializes the sentence transformer embedder.
+        Model: BAAI/bge-small-en-v1.5 (fast, high quality dense encoder)
+        """
         self.embedder = SentenceTransformer("BAAI/bge-small-en-v1.5")
 
     def encode_chunks(self, chunks):
+        """
+        Encodes list of text chunks into embeddings.
+        
+        Args:
+            chunks (list): [{"text": "...", "metadata": {...}}, ...]
+
+        Returns:
+            list[list[float]]: Dense vector embeddings
+        """
         texts = [c["text"] for c in chunks]
         embs = self.embedder.encode(
             texts,
@@ -26,14 +45,33 @@ class Embedder:
         return embs
 
     def encode_query(self, query):
+        """
+        Encodes a single query string with normalization.
+        """
         return self.embedder.encode(query, normalize_embeddings=True).tolist()
     
     def get_vector_dim(self):
+        """
+        Returns embedding dimensionality for creating Qdrant collection.
+        """
         return self.embedder.get_sentence_embedding_dimension()
     
 class Chunker:
+    """
+    Extracts text from PDF files and splits into overlapping chunks.
+    """
     @staticmethod
     def extract_and_chunk(pdf_path: str):
+        """
+        Extracts text from each PDF page and splits into chunks of fixed length.
+        Allows overlap to preserve context.
+
+        Args:
+            pdf_path (str): Path to PDF file
+
+        Returns:
+            list: [{ "text": chunk, "metadata": {...}}]
+        """
         path = Path(pdf_path)
         if not path.is_file():
             raise FileNotFoundError(pdf_path)
@@ -69,12 +107,31 @@ class Chunker:
         return chunks
 
 class VectorStore:
+    """
+    Wrapper around Qdrant for:
+        - creating collections
+        - storing chunk embeddings
+        - retrieving and re-ranking chunks
+    """
     def __init__(self,):
+        """
+        Initializes Qdrant client, embedder and reranker.
+        """
         self.client = QdrantClient(url=QDRANT_URL, timeout=60)
         self.embedder = Embedder()
         self.cross_encoder = CrossEncoder("BAAI/bge-reranker-base")
 
     def store_to_vector_db(self, collection_name, pdf_path):
+        """
+        Extract → Chunk → Embed → Store chunks into Qdrant.
+
+        Args:
+            collection_name (str): Qdrant collection
+            pdf_path (str): path to PDF file
+
+        Returns:
+            bool: True on success
+        """
         if not self._collection_exists(collection_name):
             self._create_collection(collection_name)
         chunks = Chunker.extract_and_chunk(pdf_path)
@@ -98,6 +155,23 @@ class VectorStore:
         return True
 
     def retrieve(self, query, query_history,collection_name, k = 5):
+        """
+        Retrieval phase for RAG:
+        1. Encode query
+        2. Dense search in Qdrant
+        3. Build contextual query including recent chat history
+        4. Re-rank retrieved chunks using cross-encoder
+        5. Return top k results
+
+        Args:
+            query (str): user question
+            query_history (list): recent history (for personalization)
+            collection_name (str)
+            k (int): number of final results
+
+        Returns:
+            list[dict]: [{text, score, page, source}]
+        """
         if not self._collection_exists(collection_name):
             print("No such collection exists")
             return []
@@ -156,6 +230,12 @@ class VectorStore:
         return top_k_results
 
     def _create_collection(self, collection_name) -> bool:
+        """
+        Creates a new Qdrant collection with cosine similarity.
+
+        Args:
+            collection_name (str): Id of the collection
+        """
         vector_dim = self.embedder.get_vector_dim()
         if not self.client.collection_exists(collection_name):
             self.client.create_collection(
@@ -166,4 +246,7 @@ class VectorStore:
         return False
 
     def _collection_exists(self, collection_name) -> bool:
+        """
+        Checks if Qdrant collection exists.
+        """
         return self.client.collection_exists(collection_name)

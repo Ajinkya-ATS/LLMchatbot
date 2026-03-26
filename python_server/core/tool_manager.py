@@ -4,7 +4,11 @@ from langchain.tools import tool
 from typing import Literal
 
 class ToolManager:
-
+    """
+    Provides and configures the set of tools available to agentic mode.
+    Tools in this manager can be used by REAct-style agents to perform
+    reasoning, search queries, and execute Python code safely.
+    """
     @staticmethod
     def get_tools():
         return [
