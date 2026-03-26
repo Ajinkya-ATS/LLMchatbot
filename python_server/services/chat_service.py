@@ -17,13 +17,20 @@ SIMILARITY_CSV_THRESHOLD = 0.30
 
 class ChatService:
 
-    def __init__(self, vector_store=None):
+    def __init__(self, vector_store=None):        
+        """
+        Initialize ChatService with agent manager, router, CSV agent and optional vector store.
+        """
         self.agent_manager = AgenticMode()
         self.router = Router()
         self.csv_agent = CSVAgent()
         self.vector_store = vector_store
 
     def handle_chat(self, data: dict):
+        """
+        Entry point for handling all chat requests.
+        Decides if file-based or regular chat handling is needed.
+        """
         message = data.get("message")
         model = data.get("model")
         conversation_history = data.get("conversationHistory", [])
@@ -46,6 +53,10 @@ class ChatService:
         )
 
     def _handle_text_only_chat(self, message: str, model: str, conversation_history: list):
+        """
+        Handles chat that does NOT involve any file uploads.
+        Uses Router to determine mode: grafcet / agentic / normal.
+        """
         mode = self.router.get_mode(message, conversation_history)
         
         handlers = {
@@ -59,6 +70,10 @@ class ChatService:
 
     def _handle_uploaded_file(self, message: str, model: str, 
                           conversation_history: list, uploaded_file: dict):
+        """
+        Handles scenarios where user uploads a CSV or PDF.
+        Routes based on file type.
+        """
         file_type = uploaded_file.get("fileType")
         file_id = uploaded_file.get("fileId")
 
@@ -83,6 +98,10 @@ class ChatService:
         return self._handle_text_only_chat(message, model, conversation_history)
 
     def _handle_agentic(self, message, model, history):
+        """
+        Executes agentic mode using dynamic tools/agents.
+        Converts history to LangChain messages and invokes the agent.
+        """
         try:
             executor = self.agent_manager.get_agent(model)
             role_map = {
@@ -111,14 +130,23 @@ class ChatService:
             return {"error": f"Agent error: {str(e)}"}, 501
         
     def _handle_grafcet(self, message, model, history):
+        """
+        Controls processing for GRAFCET automation diagrams.
+        """
         messages = self._build_messages(GRAFCET_SYSTEM_PROMPT, history, message)
         return self._call_ollama(model, messages, temperature=0.0, mode="grafcet")
 
     def _handle_normal(self, message, model, history):
+        """
+        Default chat handling using the normal system prompt.
+        """
         messages = self._build_messages(NORMAL_PROMPT, history, message)
         return self._call_ollama(model, messages, temperature=0.0, mode="normal")
         
     def _csv_router(self, message, model, conversation_history, file_id):
+        """
+        Routes CSV-related queries to CSV agent or normal chat.
+        """
         file_path = f'app/uploads/{file_id}.csv'
 
         if not os.path.exists(file_path):
@@ -143,6 +171,9 @@ class ChatService:
         return self._handle_text_only_chat(message, model, conversation_history)
 
     def _handle_csv(self, message: str, model: str, conversation_history: list, file_path: str):
+        """
+        Executes Pandas agent queries for CSV files and combines results with LLM.
+        """
         try:
             df = pd.read_csv(file_path)
             agent_created = self.csv_agent.create_pandas_agent(model, df)
@@ -172,6 +203,9 @@ class ChatService:
             return self._handle_text_only_chat(message, model, conversation_history)
     
     def _handle_pdf(self, message, model, conversation_history, retrieved_items):
+        """
+        Executes PDF RAG (Retrieval-Augmented Generation) using vector DB.
+        """
         history_str = format_history(conversation_history, k=3)
         retrieved_items_str = build_context(retrieved_items)
         prompt = RAG_PDF_PROMPT.format(
@@ -183,6 +217,9 @@ class ChatService:
         return self._call_ollama(model, messages, temperature=0.0, mode="rag_pdf")
 
     def _pdf_router(self, message, model, conversation_history, file_id):
+        """
+        Decides if PDF queries should use RAG based on similarity scores & LLM.
+        """
         try:
             if file_id:
                 retrieved_items = self.vector_store.retrieve(
@@ -219,6 +256,10 @@ class ChatService:
             )
         
     def _call_ollama(self, model: str, messages: list, temperature: float = 0.0, mode: str = "normal"):
+        """
+        Makes API call to Ollama model server for chat completion.
+        Includes error handling for timeouts, HTTP errors, etc.
+        """
         try:
             payload = {
                 "model": model,
