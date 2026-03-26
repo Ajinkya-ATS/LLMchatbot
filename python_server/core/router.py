@@ -13,10 +13,31 @@ from prompts.csv_agent_eligibility import CSV_AGENT_ELIGIBILITY
 ROUTER_MODEL = "gpt-oss:120b-cloud"
 
 class Router: # Mode means, agentic, grafcet or simple
+    """
+    Decides which processing mode the system should use based on:
+    - user message
+    - recent conversation history
+    - retrieved RAG items (optional)
     
+    Modes include:
+        - grafcet (Grafcet logic prompt)
+        - agentic (tool-using REAct agent)
+        - normal (default chat)
+    """
     @staticmethod
     def get_mode(message: str, history: list, retrieved_items: list = None) -> str:
+        """
+        Determines if the user wants: grafcet, agentic, or normal chat.
+        Uses a lightweight LLM (router model) to classify the request.
 
+        Args:
+            message (str): latest user message
+            history (list): last few chat turns
+            retrieved_items (list): optional RAG items for context
+
+        Returns:
+            str: "grafcet", "agentic", or "normal"
+        """
         #Just taking last 3 messages in history
         history_summary = "\n".join( f"{m.get('role', 'user')}: {m.get('content', '')[:140]}..." for m in history[-3:] ) or "No history."
         
@@ -56,6 +77,21 @@ class Router: # Mode means, agentic, grafcet or simple
         
     @staticmethod
     def check_pdf_rag_eligibility(message: str, history: list, retrieved_items) -> bool:
+        """
+        Determines whether to enable PDF RAG processing using LLM‑based reasoning.
+
+        Uses a lightweight classifier prompt to decide:
+            - TRUE: use RAG
+            - FALSE: fallback to normal chat
+
+        Args:
+            message (str): user message
+            history (list): conversation history
+            retrieved_items (list): retrieved vector DB chunks
+
+        Returns:
+            bool: Whether RAG should be used
+        """
 
         #Just taking last 3 messages in history
         history_summary = "\n".join( f"{m.get('role', 'user')}: {m.get('content', '')[:140]}..." for m in history[-3:] ) or "No history."
@@ -86,7 +122,19 @@ class Router: # Mode means, agentic, grafcet or simple
         
     @staticmethod
     def should_use_csv(message, model, conversation_history):
-        # Only took user to prevent model miss-prediction
+        """
+        Checks whether a user query should be routed to the CSV agent.
+
+        LLM-based classifier that determines if the query is data-analysis related.
+
+        Args:
+            message (str): user query
+            model (str): LLM model name
+            conversation_history (list): chat history
+
+        Returns:
+            bool: True if CSV agent is recommended
+        """
         history_summary = "\n".join( f"{m.get('role', 'user')}: {m.get('content', '')[:140]}..." for m in conversation_history[-3:] ) or "No history."
 
         payload = {
