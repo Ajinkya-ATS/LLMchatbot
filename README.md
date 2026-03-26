@@ -15,8 +15,9 @@ A ChatGPT-like interface for interacting with locally hosted Large Language Mode
 
 The application is pre-configured to work with these models:
 
+- **mistral-large-3:675b-cloud** - Mistral cloud
 - **gemma3n:e4b** (7.5 GB) - Google Gemma 3N with enhanced capabilities
-- **qwen2.5-coder:7b** (4.7 GB) - Qwen2.5 Coder optimized for programming tasks
+- **kimi-k2.5:cloud** - kimi cloud
 - **deepseek-r1:8b** (5.2 GB) - DeepSeek R1 with reasoning capabilities
 - **mistral:latest** (4.1 GB) - Mistral latest model for general purpose tasks
 
@@ -27,6 +28,7 @@ Before running this application, ensure you have:
 1. **Node.js** (v16 or higher)
 2. **Ollama** installed and running locally
 3. The required LLM models installed in Ollama
+4. **Python** (3.12)
 
 ### Installing Ollama
 
@@ -40,8 +42,9 @@ Run these commands to install the required models:
 
 ```bash
 # Install the models
+ollama pull mistral-large-3:675b-cloud
 ollama pull gemma3n:e4b
-ollama pull qwen2.5-coder:7b
+ollama pull kimi-k2.5:cloud
 ollama pull deepseek-r1:8b
 ollama pull mistral:latest
 ```
@@ -62,85 +65,9 @@ ollama pull mistral:latest
 
 ## Running the Application
 
-### Development Mode
+# Running Python Backend
 
-To run both the backend and frontend in development mode:
-
-```bash
-npm run dev
-```
-
-This will start:
-- Backend server on `http://localhost:5000`
-- Frontend React app on `http://localhost:3000`
-
-### Individual Services
-
-You can also run the services individually:
-
-**Backend only:**
-```bash
-npm run server
-```
-
-**Frontend only:**
-```bash
-npm run client
-```
-
-## Usage
-
-1. **Start the application** using `npm run dev`
-2. **Open your browser** and navigate to `http://localhost:3000`
-3. **Ensure Ollama is running** - the app will show connection status
-4. **Select a model** from the available options
-5. **Start chatting** with your selected LLM!
-
-## Configuration
-
-### Environment Variables
-
-You can customize the application using environment variables:
-
-**Backend (.env file in server directory):**
-```
-PORT=5000
-OLLAMA_BASE_URL=http://localhost:11434
-```
-
-**Frontend (.env file in client directory):**
-```
-REACT_APP_API_URL=http://localhost:5000/api
-```
-
-### Adding New Models
-
-To add support for additional models:
-
-1. **Install the model in Ollama:**
-   ```bash
-   ollama pull your-model-name
-   ```
-
-2. **Add the model to the server configuration** in `server/index.js`:
-   ```javascript
-   const AVAILABLE_MODELS = [
-     // ... existing models
-     {
-       id: 'your-model-id',
-       name: 'your-model-name',
-       size: 'X.X GB',
-       modified: 'X weeks ago',
-       description: 'Your model description'
-     }
-   ];
-   ```
-
-## Troubleshooting
-
-# Running Python Agents
-
-This guide explains how to run the Python agents locally.
+This guide explains how to run the Python Backend locally.
 
 ## Requirements
 - Python **3.12**
@@ -214,7 +141,60 @@ flask db upgrade
 ```
 
 
-The Python agents should now be running.
+The Python Backend should now be running.
+
+**Frontend only:**
+```bash
+cd client
+npm run client
+```
+
+## Usage
+
+1. **Start the application** using `cd client` and then `npm run start` and start the BE using above steps
+2. **Open your browser** and navigate to `http://localhost:3000`
+3. **Ensure Ollama is running** - the app will show connection status
+4. **Select a model** from the available options
+5. **Start chatting** with your selected LLM!
+
+## Configuration
+
+### Environment Variables
+
+You can customize the application using environment variables:
+
+**Backend (.env file in server directory):**
+```
+PORT=5001
+OLLAMA_BASE_URL=http://localhost:11434
+```
+
+**Frontend (.env file in client directory):**
+```
+REACT_APP_API_URL=http://localhost:5001/api
+```
+
+### Adding New Models
+
+To add support for additional models:
+
+1. **Install the model in Ollama:**
+   ```bash
+   ollama pull your-model-name
+   ```
+
+2. **Add the model to the server configuration** in `python_server\app\routes.py`:
+   ```python
+   AVAILABLE_MODELS = [
+     {
+       id: 'your-model-id',
+       name: 'your-model-name',
+       size: 'X.X GB',
+       modified: 'X weeks ago',
+       description: 'Your model description'
+     },
+   ]
+   ```
 
 ### Common Issues
 
@@ -227,7 +207,7 @@ The Python agents should now be running.
    - Install the model: `ollama pull model-name`
 
 3. **Port conflicts**
-   - Backend runs on port 5000, frontend on port 3000
+   - Backend runs on port 5001, frontend on port 3000
    - Change ports in the respective configuration files if needed
 
 4. **CORS errors**
@@ -251,9 +231,9 @@ LLMChatbot/
 │   │   ├── services/       # API service layer
 │   │   └── App.js         # Main App component
 │   └── package.json
-├── server/                 # Node.js backend
-│   ├── index.js           # Express server with Ollama integration
-│   └── package.json
+├── python_server/                 # Node.js backend
+│   ├── app.py           # Express server with Ollama integration
+│   └── docker-compose.yml
 ├── package.json           # Root package.json
 └── README.md
 ```
