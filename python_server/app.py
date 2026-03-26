@@ -14,32 +14,32 @@ CORS(app)  # equivalent to app.use(cors())
 
 AVAILABLE_MODELS = [
     {
-        "id": "gpt-oss-20b",
-        "name": "gpt-oss:20b",
-        "size": "13 GB",
+        "id": "46e0c10c039e",
+        "name": "llama3.1:8b",
+        "size": "4.9 GB",
         "modified": "1 day ago",
-        "description": "GPT-OSS 20B model - Large open source language model"
+        "description": "llama3.1:8b model - Open source model by meta"
     },
     {
-        "id": "15cb39fd9394",
-        "name": "gemma3n:e4b",
-        "size": "7.5 GB",
+        "id": "199456d876ee",
+        "name": "granite3-dense:8b",
+        "size": "4.9 GB",
         "modified": "6 weeks ago",
-        "description": "Google Gemma 3N model with enhanced capabilities"
+        "description": "IBM open source model"
     },
     {
-        "id": "dae161e27b0e",
-        "name": "qwen2.5-coder:7b",
+        "id": "845dbda0ea48",
+        "name": "qwen2.5:7b",
         "size": "4.7 GB",
         "modified": "2 months ago",
-        "description": "Qwen2.5 Coder model optimized for programming tasks"
+        "description": "Qwen2.5 model open source"
     },
     {
-        "id": "6995872bfe4c",
-        "name": "deepseek-r1:8b",
+        "id": "78fad5d182a7",
+        "name": "phi4-mini:latest",
         "size": "5.2 GB",
         "modified": "2 months ago",
-        "description": "DeepSeek R1 model with reasoning capabilities"
+        "description": "Microsoft's powerful open source model"
     },
     {
         "id": "f974a74358d6",

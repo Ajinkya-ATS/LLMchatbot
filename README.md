@@ -40,9 +40,10 @@ Run these commands to install the required models:
 
 ```bash
 # Install the models
-ollama pull gemma3n:e4b
-ollama pull qwen2.5-coder:7b
-ollama pull deepseek-r1:8b
+ollama pull llama3.1:8b
+ollama pull granite3-dense:8b
+ollama pull qwen2.5:7b
+ollama pull phi4-mini:latest
 ollama pull mistral:latest
 ```
 
