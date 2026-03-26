@@ -13,6 +13,8 @@ from langchain_core.messages import HumanMessage, AIMessage
 import os
 import pandas as pd
 
+SIMILARITY_CSV_THRESHOLD = 0.30
+
 class ChatService:
 
     def __init__(self, vector_store=None):
@@ -26,122 +28,90 @@ class ChatService:
         model = data.get("model")
         conversation_history = data.get("conversationHistory", [])
         uploaded_file = data.get("uploadedFile", None)
-        print(uploaded_file)
         if not message or not model:
             return {"error": "Message and model are required"}, 400
         
         if uploaded_file:
-            return self._generate_rag_response(message, model, conversation_history, uploaded_file)
+            return self._handle_uploaded_file(
+                message=message,
+                model=model,
+                conversation_history=conversation_history,
+                uploaded_file=uploaded_file
+            )
 
-        return self._generate_response(message, model, conversation_history)
-    
-    def _generate_rag_response(self, message, model, conversation_history, uploaded_file):
-        file_type = uploaded_file.get("fileType", None)
-        file_id = uploaded_file.get("fileId", None)
+        return self._handle_text_only_chat(
+            message=message,
+            model=model,
+            conversation_history=conversation_history
+        )
+
+    def _handle_text_only_chat(self, message: str, model: str, conversation_history: list):
+        mode = self.router.get_mode(message, conversation_history)
+        
+        handlers = {
+            "grafcet": self._handle_grafcet,
+            "agentic": self._handle_agentic,
+            "normal": self._handle_normal
+        }
+        
+        handler = handlers.get(mode, self._handle_normal)
+        return handler(message, model, conversation_history)
+
+    def _handle_uploaded_file(self, message: str, model: str, 
+                            conversation_history: list, uploaded_file: dict):
+        file_type = uploaded_file.get("fileType")
+        file_id = uploaded_file.get("fileId")
 
         if not file_id:
-            return self._generate_response(message, model, conversation_history)
-        if file_type == ".csv" or file_type == "text/csv":
-            return self._handle_csv_agent(message=message, model=model, conversation_history=conversation_history, file_id=file_id)
-        elif file_type == ".pdf" or file_type == "text/pdf":
-            if not self.vector_store:
-                return self._generate_response(message, model, conversation_history)
-            return self._handle_pdf_rag(message=message, model=model, conversation_history=conversation_history, file_id=file_id)
+            return self._handle_text_only_chat(message, model, conversation_history)
+
+        if file_type in [".csv", "text/csv"]:
+            return self._csv_router(message, model, conversation_history, file_id)
         
-        return self._generate_response(message, model, conversation_history)
+        elif file_type in [".pdf", "text/pdf"]:
+            if not self.vector_store:
+                return self._handle_text_only_chat(message, model, conversation_history)
+            return self._pdf_router(message, model, conversation_history, file_id)
 
-    def _generate_response(self, message, model, conversation_history):
-        mode = self.router.get_mode(message, conversation_history)
-        if mode == "grafcet":
-            return self._handle_grafcet_mode(message, model, conversation_history)
-        elif mode == "agentic":
-            return self._handle_agent_mode(message, model, conversation_history)
-        else:
-            return self._handle_normal_mode(message, model, conversation_history)
+        return self._handle_text_only_chat(message, model, conversation_history)
 
-    def _handle_agent_mode(self, message, model, history):
+    def _handle_agentic(self, message, model, history):
         try:
             executor = self.agent_manager.get_agent(model)
-            
-            messages = []
-            for item in history:
-                role = item.get("role", "user")
-                content = item.get("content", "")
-                
-                if role == "user":
-                    messages.append(HumanMessage(content=content))
-                elif role == "assistant":
-                    messages.append(AIMessage(content=content))
-            
-            # Add the current message
-            messages.append(HumanMessage(content=message))
-            
-            # Invoke the executor with input parameter
-            response = executor.invoke({"input": message})
+            role_map = {
+                "user": HumanMessage,
+                "assistant": AIMessage,
+            }
+            messages = [
+                role_map.get(item.get("role"), HumanMessage)(
+                    content=item.get("content", "")
+                )
+                for item in history
+            ]
 
-            # Extract the response
-            final_message = response["output"]
-            clean = clean_response(final_message)
+            messages.append(HumanMessage(content=message))
+            response = executor.invoke({"input": message})
+            clean = clean_response(response.get("output", ""))
 
             return {
                 "response": clean,
                 "model": model,
                 "timestamp": formatted_datetime(),
-                "mode": "agent"
+                "mode": "agent",
             }
+
         except Exception as e:
             return {"error": f"Agent error: {str(e)}"}, 501
         
-    def _handle_grafcet_mode(self, message, model, history):
-        try:
-            messages = [{"role": "system", "content": GRAFCET_SYSTEM_PROMPT}]
-            for item in history:
-                messages.append({"role": item.get("role"), "content": item.get("content")})
-            messages.append({"role": "user", "content": message})
+    def _handle_grafcet(self, message, model, history):
+        messages = self._build_messages(GRAFCET_SYSTEM_PROMPT, history, message)
+        return self._call_ollama(model, messages, temperature=0.0, mode="grafcet")
 
-            resp = requests.post(
-                f"{OLLAMA_BASE_URL}/api/chat",
-                json={"model": model, "messages": messages, "stream": False},
-                timeout=600
-            )
-            resp.raise_for_status()
-            content = resp.json()["message"]["content"]
-
-            return {
-                "response": clean_response(content),
-                "model": model,
-                "timestamp": formatted_datetime(),
-                "mode": "grafcet"
-            }
-        except Exception as e:
-            return {"error": f"Normal chat error: {str(e)}"}, 502
-
-    def _handle_normal_mode(self, message, model, history):
-        try:
-            messages = [{"role": "system", "content": NORMAL_PROMPT}]
-
-            for item in history:
-                messages.append({"role": item.get("role"), "content": item.get("content")})
-            messages.append({"role": "user", "content": message})
-
-            resp = requests.post(
-                f"{OLLAMA_BASE_URL}/api/chat",
-                json={"model": model, "messages": messages, "stream": False},
-                timeout=600
-            )
-            resp.raise_for_status()
-            content = resp.json()["message"]["content"]
-
-            return {
-                "response": clean_response(content),
-                "model": model,
-                "timestamp": formatted_datetime(),
-                "mode": "normal"
-            }
-        except Exception as e:
-            return {"error": f"Normal chat error: {str(e)}"}, 503
+    def _handle_normal(self, message, model, history):
+        messages = self._build_messages(NORMAL_PROMPT, history, message)
+        return self._call_ollama(model, messages, temperature=0.0, mode="normal")
         
-    def _handle_csv_agent(self, message, model, conversation_history, file_id):
+    def _csv_router(self, message, model, conversation_history, file_id):
         file_path = f'app/uploads/{file_id}.csv'
         csv_keywords = {
             "csv", "data", "column", "row", "filter",
@@ -149,102 +119,63 @@ class ChatService:
             "group", "sort", "select"
         }
         if not os.path.exists(file_path):
-            return self._generate_response(
+            return self._handle_text_only_chat(
                 message, model, conversation_history
             )
-        if any(keyword in message for keyword in csv_keywords):
-            return self._generate_csv_response(
+        if any(keyword.lower() in message for keyword in csv_keywords):
+            return self._handle_csv(
                 message, model, conversation_history, file_path
             )
         if self.router._csv_router(message, model, conversation_history):
-            return self._generate_csv_response(
+            return self._handle_csv(
                 message, model, conversation_history, file_path
             )
         
-        return self._generate_response(
+        return self._handle_text_only_chat(
                 message, model, conversation_history
             )
 
-    def _generate_csv_response(self, message, model, conversation_history, file_path):
+    def _handle_csv(self, message: str, model: str, conversation_history: list, file_path: str):
         try:
             df = pd.read_csv(file_path)
-            results = None
-            if self.csv_agent.create_pandas_agent(model, df):
-                results = self.csv_agent.execute_query(message)
-                print("Using csv agent")
-                context=str(results) if results else "No relevant data found"
-                print(context)
-                messages = []
+            agent_created = self.csv_agent.create_pandas_agent(model, df)
+            if not agent_created:
+                return self._handle_text_only_chat(message, model, conversation_history)
 
-                for item in conversation_history:
-                    messages.append({
-                        "role": item.get("role"),
-                        "content": item.get("content")
-                    })
+            print("Using CSV agent")
+            results = self.csv_agent.execute_query(message)
 
-                messages.append({
-                    "role": "user",
-                    "content": CSV_RAG_PROMPT.format(
-                        query=message,
-                        context=context
-                    )
-                })
+            context = str(results) if results else "No relevant data found"
+            print(context)
 
-                resp = requests.post(
-                    f"{OLLAMA_BASE_URL}/api/chat",
-                    json={"model": model, "messages": messages, "stream": False},
-                    timeout=600
-                )
-                resp.raise_for_status()
-                content = resp.json()["message"]["content"]
-                return {
-                    "response": clean_response(content),
-                    "model": model,
-                    "timestamp": formatted_datetime(),
-                    "mode": "csv_rag"
-                }
-            return self._generate_response(
-                    message, model, conversation_history
-                )
+            messages = [
+                {"role": item.get("role"), "content": item.get("content")}
+                for item in conversation_history
+            ]
+
+            messages.append({
+                "role": "user",
+                "content": CSV_RAG_PROMPT.format(query=message, context=context)
+            })
+            
+            return self._call_ollama(model, messages, temperature=0.0, mode="csv_agent")
+
         except Exception as e:
-            print(f"CSV error: {str(e)}")
-            return self._generate_response(
-                message, model, conversation_history
-            )
+            print(f"[CSV ERROR] {e}")
+            return self._handle_text_only_chat(message, model, conversation_history)
     
-    def _generate_pdf_response(self, message, model, conversation_history, retrieved_items):
+    def _handle_pdf(self, message, model, conversation_history, retrieved_items):
         history_str = format_history(conversation_history, k=3)
         retrieved_items_str = build_context(retrieved_items)
-        print(retrieved_items_str)
-        payload = {
-            "model": model, # or tiny fast model
-            "messages": [
-                {"role": "user", "content": RAG_PDF_PROMPT.format(
-                    query=message,
-                    history=history_str,
-                    context = retrieved_items_str
-                )}
-            ],
-            "stream": False,
-            "options": {"temperature": 0.0}
-        }
-
-        resp = requests.post(
-            f"{OLLAMA_BASE_URL}/api/chat",
-            json=payload,
-            timeout=600
+        prompt = RAG_PDF_PROMPT.format(
+            query=message,
+            history=history_str,
+            context=retrieved_items_str
         )
-        resp.raise_for_status()
-        content = resp.json()["message"]["content"]
+        messages = [{"role": "user", "content": prompt}]
+        return self._call_ollama(model, messages, temperature=0.0, mode="rag_pdf")
 
-        return {
-            "response": clean_response(content),
-            "model": model,
-            "timestamp": formatted_datetime(),
-            "mode": "rag_pdf"
-        }
-
-    def _handle_pdf_rag(self, message, model, conversation_history, file_id):
+    def _pdf_router(self, message, model, conversation_history, file_id):
         try:
             if file_id:
                 retrieved_items = self.vector_store.retrieve(
@@ -256,26 +187,75 @@ class ChatService:
                 max_score = 0
                 if retrieved_items:
                     max_score = max(item["score"] for item in retrieved_items if item["score"] is not None)
-                    if max_score > 0.30:
+                    if max_score > SIMILARITY_CSV_THRESHOLD:
                         print("Using RAG Based of similarity score")
-                        return self._generate_pdf_response(
+                        return self._handle_pdf(
                             message, model, conversation_history, retrieved_items
                         )
                     elif self.router.check_pdf_rag_eligibility(message, conversation_history, retrieved_items):
                         print("Using RAG after LLM determined its needed")
-                        return self._generate_pdf_response(
+                        return self._handle_pdf(
                             message, model, conversation_history, retrieved_items
                         )
                     print(max_score)
                     print("Using normal mode because of low similarity score")
                 
                 print("Using Normal Mode")
-                return self._generate_response(
+                return self._handle_text_only_chat(
                     message, model, conversation_history
                 )
 
         except Exception as e:
             print(f"RAG retrieval error: {str(e)}")
-            return self._generate_response(
+            return self._handle_text_only_chat(
                 message, model, conversation_history
             )
+        
+    def _call_ollama(self, model: str, messages: list, temperature: float = 0.0, mode: str = "normal"):
+        try:
+            payload = {
+                "model": model,
+                "messages": messages,
+                "stream": False,
+                "options": {"temperature": temperature}
+            }
+
+            resp = requests.post(
+                f"{OLLAMA_BASE_URL}/api/chat",
+                json=payload,
+                timeout=600
+            )
+            resp.raise_for_status()
+            
+            content = resp.json()["message"]["content"]
+            cleaned = clean_response(content)
+
+            return {
+                "response": cleaned,
+                "model": model,
+                "timestamp": formatted_datetime(),
+                "mode": mode
+            }
+
+        except requests.exceptions.Timeout:
+            return {"error": "Request to Ollama timed out"}, 504
+        except requests.exceptions.HTTPError as e:
+            return {"error": f"Ollama HTTP error: {str(e)}"}, 502
+        except Exception as e:
+            print(f"Ollama call error: {str(e)}")
+            return {"error": f"Failed to get response from model: {str(e)}"}, 500
+        
+    def _build_messages(self, system_prompt: str, history: list, user_message: str) -> list:
+        """
+        Builds consistent message format for Ollama.
+        """
+        messages = [{"role": "system", "content": system_prompt}]
+        
+        for item in history:
+            messages.append({
+                "role": item.get("role", "user"),
+                "content": item.get("content", "")
+            })
+        
+        messages.append({"role": "user", "content": user_message})
+        return messages
