@@ -65,7 +65,7 @@ ollama pull mistral:latest
 
 ## Running the Application
 
-# Running Python Backend
+### Running Python Backend
 
 This guide explains how to run the Python Backend locally.
 
@@ -113,11 +113,6 @@ pip install -r requirements.txt
 
 ## Running the Agent
 
-Start the Python server:
-
-```bash
-python app.py
-```
 ### Setup and Database Initialization
 
 Run the application containers in detached mode:
@@ -140,6 +135,11 @@ flask db migrate -m "initial"
 flask db upgrade
 ```
 
+Start the Python server:
+
+```bash
+python app.py
+```
 
 The Python Backend should now be running.
 
