@@ -15,13 +15,13 @@ import pandas as pd
 
 class ChatService:
 
-    agent_manager = AgenticMode()
-    router = Router()
-    csv_agent = CSVAgent()
-    vector_store = None  # Will be initialized in app.py
+    def __init__(self, vector_store=None):
+        self.agent_manager = AgenticMode()
+        self.router = Router()
+        self.csv_agent = CSVAgent()
+        self.vector_store = vector_store
 
-    @staticmethod
-    def handle_chat(data: dict):
+    def handle_chat(self, data: dict):
         message = data.get("message")
         model = data.get("model")
         conversation_history = data.get("conversationHistory", [])
@@ -30,41 +30,39 @@ class ChatService:
         if not message or not model:
             return {"error": "Message and model are required"}, 400
         
-        if uploaded_file and ChatService.vector_store:
-            return ChatService._generate_rag_response(message, model, conversation_history, uploaded_file)
+        if uploaded_file:
+            return self._generate_rag_response(message, model, conversation_history, uploaded_file)
 
-        return ChatService._generate_response(message, model, conversation_history)
+        return self._generate_response(message, model, conversation_history)
     
-    @staticmethod
-    def _generate_rag_response(message, model, conversation_history, uploaded_file):
-        file_type = os.path.splitext(uploaded_file.get("fileName"))[1]
+    def _generate_rag_response(self, message, model, conversation_history, uploaded_file):
+        file_type = uploaded_file.get("fileType", None)
         file_id = uploaded_file.get("fileId", None)
 
         if not file_id:
-            return ChatService._generate_response(message, model, conversation_history)
-        if file_type == ".csv":
-            return ChatService._handle_csv_agent(message=message, model=model, conversation_history=conversation_history, file_id=file_id)
-        elif file_type == ".pdf":
-            return ChatService._handle_pdf_rag(message=message, model=model, conversation_history=conversation_history, file_id=file_id)
+            return self._generate_response(message, model, conversation_history)
+        if file_type == ".csv" or file_type == "text/csv":
+            return self._handle_csv_agent(message=message, model=model, conversation_history=conversation_history, file_id=file_id)
+        elif file_type == ".pdf" or file_type == "text/pdf":
+            if not self.vector_store:
+                return self._generate_response(message, model, conversation_history)
+            return self._handle_pdf_rag(message=message, model=model, conversation_history=conversation_history, file_id=file_id)
         
-        return ChatService._generate_response(message, model, conversation_history)
+        return self._generate_response(message, model, conversation_history)
 
-    @staticmethod
-    def _generate_response(message, model, conversation_history):
-        mode = ChatService.router.get_mode(message, conversation_history)
+    def _generate_response(self, message, model, conversation_history):
+        mode = self.router.get_mode(message, conversation_history)
         if mode == "grafcet":
-            return ChatService._handle_grafcet_mode(message, model, conversation_history)
+            return self._handle_grafcet_mode(message, model, conversation_history)
         elif mode == "agentic":
-            return ChatService._handle_agent_mode(message, model, conversation_history)
+            return self._handle_agent_mode(message, model, conversation_history)
         else:
-            return ChatService._handle_normal_mode(message, model, conversation_history)
+            return self._handle_normal_mode(message, model, conversation_history)
 
-    @staticmethod
-    def _handle_agent_mode(message, model, history):
+    def _handle_agent_mode(self, message, model, history):
         try:
-            executor = ChatService.agent_manager.get_agent(model)
+            executor = self.agent_manager.get_agent(model)
             
-            # Convert conversation history to LangChain messages
             messages = []
             for item in history:
                 role = item.get("role", "user")
@@ -94,8 +92,7 @@ class ChatService:
         except Exception as e:
             return {"error": f"Agent error: {str(e)}"}, 501
         
-    @staticmethod
-    def _handle_grafcet_mode(message, model, history):
+    def _handle_grafcet_mode(self, message, model, history):
         try:
             messages = [{"role": "system", "content": GRAFCET_SYSTEM_PROMPT}]
             for item in history:
@@ -119,8 +116,7 @@ class ChatService:
         except Exception as e:
             return {"error": f"Normal chat error: {str(e)}"}, 502
 
-    @staticmethod
-    def _handle_normal_mode(message, model, history):
+    def _handle_normal_mode(self, message, model, history):
         try:
             messages = [{"role": "system", "content": NORMAL_PROMPT}]
 
@@ -145,38 +141,36 @@ class ChatService:
         except Exception as e:
             return {"error": f"Normal chat error: {str(e)}"}, 503
         
-    @staticmethod
-    def _handle_csv_agent(message, model, conversation_history, file_id):
-        file_path = f'uploads/{file_id}.csv'
+    def _handle_csv_agent(self, message, model, conversation_history, file_id):
+        file_path = f'app/uploads/{file_id}.csv'
         csv_keywords = {
             "csv", "data", "column", "row", "filter",
             "table", "sum", "average", "mean", "count",
             "group", "sort", "select"
         }
         if not os.path.exists(file_path):
-            return ChatService._generate_response(
+            return self._generate_response(
                 message, model, conversation_history
             )
         if any(keyword in message for keyword in csv_keywords):
-            return ChatService._generate_csv_response(
+            return self._generate_csv_response(
                 message, model, conversation_history, file_path
             )
-        if ChatService.router._csv_router(message, model, conversation_history):
-            return ChatService._generate_csv_response(
+        if self.router._csv_router(message, model, conversation_history):
+            return self._generate_csv_response(
                 message, model, conversation_history, file_path
             )
         
-        return ChatService._generate_response(
+        return self._generate_response(
                 message, model, conversation_history
             )
 
-    @staticmethod
-    def _generate_csv_response(message, model, conversation_history, file_path):
+    def _generate_csv_response(self, message, model, conversation_history, file_path):
         try:
             df = pd.read_csv(file_path)
             results = None
-            if ChatService.csv_agent.create_pandas_agent(model, df):
-                results = ChatService.csv_agent.execute_query(message)
+            if self.csv_agent.create_pandas_agent(model, df):
+                results = self.csv_agent.execute_query(message)
                 print("Using csv agent")
                 context=str(results) if results else "No relevant data found"
                 print(context)
@@ -209,17 +203,16 @@ class ChatService:
                     "timestamp": formatted_datetime(),
                     "mode": "csv_rag"
                 }
-            return ChatService._generate_response(
+            return self._generate_response(
                     message, model, conversation_history
                 )
         except Exception as e:
             print(f"CSV error: {str(e)}")
-            return ChatService._generate_response(
+            return self._generate_response(
                 message, model, conversation_history
             )
     
-    @staticmethod
-    def _generate_pdf_response(message, model, conversation_history, retrieved_items):
+    def _generate_pdf_response(self, message, model, conversation_history, retrieved_items):
         history_str = format_history(conversation_history, k=3)
         retrieved_items_str = build_context(retrieved_items)
         print(retrieved_items_str)
@@ -251,11 +244,10 @@ class ChatService:
             "mode": "rag_pdf"
         }
 
-    @staticmethod
-    def _handle_pdf_rag(message, model, conversation_history, file_id):
+    def _handle_pdf_rag(self, message, model, conversation_history, file_id):
         try:
             if file_id:
-                retrieved_items = ChatService.vector_store.retrieve(
+                retrieved_items = self.vector_store.retrieve(
                     query=message,
                     query_history = conversation_history,
                     collection_name=file_id,
@@ -266,24 +258,24 @@ class ChatService:
                     max_score = max(item["score"] for item in retrieved_items if item["score"] is not None)
                     if max_score > 0.30:
                         print("Using RAG Based of similarity score")
-                        return ChatService._generate_pdf_response(
+                        return self._generate_pdf_response(
                             message, model, conversation_history, retrieved_items
                         )
-                    elif ChatService.router.check_pdf_rag_eligibility(message, conversation_history, retrieved_items):
+                    elif self.router.check_pdf_rag_eligibility(message, conversation_history, retrieved_items):
                         print("Using RAG after LLM determined its needed")
-                        return ChatService._generate_pdf_response(
+                        return self._generate_pdf_response(
                             message, model, conversation_history, retrieved_items
                         )
                     print(max_score)
                     print("Using normal mode because of low similarity score")
                 
                 print("Using Normal Mode")
-                return ChatService._generate_response(
+                return self._generate_response(
                     message, model, conversation_history
                 )
 
         except Exception as e:
             print(f"RAG retrieval error: {str(e)}")
-            return ChatService._generate_response(
+            return self._generate_response(
                 message, model, conversation_history
             )
