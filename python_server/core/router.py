@@ -85,7 +85,7 @@ class Router: # Mode means, agentic, grafcet or simple
             return False
         
     @staticmethod
-    def _csv_router(message, model, conversation_history):
+    def should_use_csv(message, model, conversation_history):
         # Only took user to prevent model miss-prediction
         history_summary = "\n".join( f"{m.get('role', 'user')}: {m.get('content', '')[:140]}..." for m in conversation_history[-3:] ) or "No history."
 

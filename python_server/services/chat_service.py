@@ -120,27 +120,27 @@ class ChatService:
         
     def _csv_router(self, message, model, conversation_history, file_id):
         file_path = f'app/uploads/{file_id}.csv'
+
+        if not os.path.exists(file_path):
+            return self._handle_text_only_chat(message, model, conversation_history)
+
         csv_keywords = {
             "csv", "data", "column", "row", "filter",
             "table", "sum", "average", "mean", "count",
             "group", "sort", "select"
         }
-        if not os.path.exists(file_path):
-            return self._handle_text_only_chat(
-                message, model, conversation_history
-            )
-        if any(keyword.lower() in message for keyword in csv_keywords):
-            return self._handle_csv(
-                message, model, conversation_history, file_path
-            )
-        if self.router._csv_router(message, model, conversation_history):
-            return self._handle_csv(
-                message, model, conversation_history, file_path
-            )
-        
-        return self._handle_text_only_chat(
-                message, model, conversation_history
-            )
+
+        message_lower = message.lower()
+
+        should_use_csv = (
+            any(keyword in message_lower for keyword in csv_keywords)
+            or self.router.should_use_csv(message, model, conversation_history)
+        )
+
+        if should_use_csv:
+            return self._handle_csv(message, model, conversation_history, file_path)
+
+        return self._handle_text_only_chat(message, model, conversation_history)
 
     def _handle_csv(self, message: str, model: str, conversation_history: list, file_path: str):
         try:
