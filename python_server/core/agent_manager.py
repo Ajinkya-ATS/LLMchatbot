@@ -12,13 +12,30 @@ import matplotlib.pyplot as plt
 from langchain.tools import tool
 
 class CSVAgent:
+    """
+    Agent wrapper enabling LLM interactions with CSV data.
+    Supports dataframe querying, analysis, and safe execution of plotting code.
+    """
     def __init__(self):
+        """
+        Initializes CSVAgent with empty agent & dataframe references.
+        """
         self.agent = None
         self.df = None
+
     @tool
     def execute_plot_code(self, code: str) -> str:
-        """Execute Python code that uses pandas dataframe df and matplotlib for plotting. 
-        Returns the result of execution."""
+        """
+        Executes Python code passed from the agent (for plotting or transformations).
+
+        The execution environment only exposes:
+        - df: the loaded pandas DataFrame
+        - pd: pandas library
+        - plt: matplotlib for plotting
+
+        Returns:
+            str: status message indicating success or error.
+        """
         try:
             exec(code, {"df": self.df, "pd": pd, "plt": plt})
             return "Plot code executed successfully"
@@ -26,6 +43,17 @@ class CSVAgent:
             return f"Error: {str(e)}"
     
     def create_pandas_agent(self, model, df):
+        """
+        Creates a Pandas DataFrame agent using the provided LLM model and dataframe.
+        Allows the agent to execute SQL-like reasoning, analysis, and plotting.
+
+        Args:
+            model (str): Model name for the LLM.
+            df (pd.DataFrame): Loaded CSV dataframe.
+
+        Returns:
+            bool: True if agent created successfully; otherwise False.
+        """
         try:
             self.df = df
             llm = ChatOllama(
@@ -49,6 +77,15 @@ class CSVAgent:
             return False
 
     def execute_query(self, query):
+        """
+        Executes a query using the active CSV agent.
+
+        Args:
+            query (str): User query or instruction related to CSV.
+
+        Returns:
+            str: Output from agent or error message.
+        """
         if self.agent:
             results = self.agent.invoke({"input": query})
             return results['output']
@@ -56,8 +93,22 @@ class CSVAgent:
 
 
 class AgenticMode:
+    """
+    Manages creation and caching of agentic mode LLM agents.
+    Agents include tool use, REAct-style reasoning, and step-by-step workflows.
+    """
     @lru_cache(maxsize=128)
     def get_agent(self, model: str):
+        """
+        Creates (and caches) an agentic REAct-based agent for a specific model.
+        Uses ToolManager & PromptManager for tools and custom prompts.
+
+        Args:
+            model (str): LLM model name.
+
+        Returns:
+            AgentExecutor: Configured agent ready to run tool-based reasoning.
+        """
         llm = ChatOllama(
             model=model,
             temperature=0,
