@@ -132,12 +132,12 @@ class ChatService:
 
         message_lower = message.lower()
 
-        should_use_csv = (
+        use_csv = (
             any(keyword in message_lower for keyword in csv_keywords)
             or self.router.should_use_csv(message, model, conversation_history)
         )
 
-        if should_use_csv:
+        if use_csv:
             return self._handle_csv(message, model, conversation_history, file_path)
 
         return self._handle_text_only_chat(message, model, conversation_history)
