@@ -49,17 +49,30 @@ UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploads')
 ALLOWED_EXTENSIONS = {'csv', 'pdf'}
 
 def allowed_file(filename):
+    """
+    Checks if an uploaded file has an allowed extension.
+    """
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def register_routes(app):
+    """
+    Registers all API endpoints for the Flask application.
+    """
 
     @app.route('/api/models', methods=['GET'])
     def get_models():
+        """
+        Returns list of supported AI models (static list, UI reference).
+        """
         return jsonify(AVAILABLE_MODELS)
 
 
     @app.route('/api/health', methods=['GET'])
     def health_check():
+        """
+        Checks connectivity to the Ollama server.
+        Returns version, available models, and connection status.
+        """
         try:
             r = requests.get(f"{OLLAMA_BASE_URL}/api/tags", timeout=5)
             r.raise_for_status()
@@ -78,6 +91,10 @@ def register_routes(app):
 
     @app.post('/api/chat')
     def chat():
+        """
+        Passes chat request JSON directly to ChatService.
+        Handles agentic mode, csv/pdf upload integration, and normal chat.
+        """
         data = request.get_json()
         result = app.chat_service.handle_chat(data)
         return jsonify(result)
@@ -85,6 +102,14 @@ def register_routes(app):
 
     @app.route('/api/upload', methods=['POST'])
     def upload_file():
+        """
+        Handles file uploads (CSV or PDF).
+        - Validates file
+        - Deduplicates using hash
+        - Saves to disk
+        - Stores metadata in DB
+        - For PDFs: generates embeddings + loads into vector DB
+        """
         try:
             # Check if file is in request
             if 'file' not in request.files:
@@ -160,6 +185,10 @@ def register_routes(app):
 
     @app.route('/api/models/pull', methods=['POST'])
     def pull_model():
+        """
+        Endpoint to download/pull a model from Ollama registry.
+        Useful for dynamically loading large or new models on demand.
+        """
         data = request.get_json()
         model_name = data.get('modelName')
 
