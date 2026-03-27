@@ -3,6 +3,7 @@ import requests
 from config import Config
 from utils.response_cleaner import clean_response, boolean_filter
 from utils.basic_utils import formatted_datetime, format_history, build_context
+from utils.ollama_utils import _call_ollama, _build_messages
 from core.agent_manager import AgenticMode, CSVAgent
 from core.router import Router
 from prompts.grafcet_prompt import GRAFCET_SYSTEM_PROMPT
@@ -94,6 +95,7 @@ class ChatService:
             "text/csv": self._csv_router,
             ".pdf": self._pdf_router,
             "text/pdf": self._pdf_router,
+            "application/pdf": self._pdf_router
         }
 
         router = routers.get(file_type)
@@ -142,15 +144,15 @@ class ChatService:
         """
         Controls processing for GRAFCET automation diagrams.
         """
-        messages = self._build_messages(GRAFCET_SYSTEM_PROMPT, history, message)
-        return self._call_ollama(model, messages, temperature=0.0, mode="grafcet")
+        messages = _build_messages(GRAFCET_SYSTEM_PROMPT, history, message)
+        return _call_ollama(model, messages, temperature=0.0, mode="grafcet")
 
     def _handle_normal(self, message, model, history):
         """
         Default chat handling using the normal system prompt.
         """
-        messages = self._build_messages(NORMAL_PROMPT, history, message)
-        return self._call_ollama(model, messages, temperature=0.0, mode="normal")
+        messages = _build_messages(NORMAL_PROMPT, history, message)
+        return _call_ollama(model, messages, temperature=0.0, mode="normal")
         
     def _csv_router(self, message, model, conversation_history, file_id):
         """
@@ -205,7 +207,7 @@ class ChatService:
                 "content": CSV_RAG_PROMPT.format(query=message, context=context)
             })
             
-            return self._call_ollama(model, messages, temperature=0.0, mode="csv_agent")
+            return _call_ollama(model, messages, temperature=0.0, mode="csv_agent")
 
         except Exception as e:
             print(f"[CSV ERROR] {e}")
@@ -223,7 +225,7 @@ class ChatService:
             context=retrieved_items_str
         )
         messages = [{"role": "user", "content": prompt}]
-        return self._call_ollama(model, messages, temperature=0.0, mode="rag_pdf")
+        return _call_ollama(model, messages, temperature=0.0, mode="rag_pdf")
 
     def _pdf_router(self, message, model, conversation_history, file_id):
         """
@@ -263,56 +265,3 @@ class ChatService:
             return self._handle_text_only_chat(
                 message, model, conversation_history
             )
-        
-    def _call_ollama(self, model: str, messages: list, temperature: float = 0.0, mode: str = "normal"):
-        """
-        Makes API call to Ollama model server for chat completion.
-        Includes error handling for timeouts, HTTP errors, etc.
-        """
-        try:
-            payload = {
-                "model": model,
-                "messages": messages,
-                "stream": False,
-                "options": {"temperature": temperature}
-            }
-
-            resp = requests.post(
-                f"{Config.OLLAMA_BASE_URL}/api/chat",
-                json=payload,
-                timeout=600
-            )
-            resp.raise_for_status()
-            
-            content = resp.json()["message"]["content"]
-            cleaned = clean_response(content)
-
-            return {
-                "response": cleaned,
-                "model": model,
-                "timestamp": formatted_datetime(),
-                "mode": mode
-            }
-
-        except requests.exceptions.Timeout:
-            return {"error": "Request to Ollama timed out"}, 504
-        except requests.exceptions.HTTPError as e:
-            return {"error": f"Ollama HTTP error: {str(e)}"}, 502
-        except Exception as e:
-            print(f"Ollama call error: {str(e)}")
-            return {"error": f"Failed to get response from model: {str(e)}"}, 500
-        
-    def _build_messages(self, system_prompt: str, history: list, user_message: str) -> list:
-        """
-        Builds consistent message format for Ollama.
-        """
-        messages = [{"role": "system", "content": system_prompt}]
-        
-        for item in history:
-            messages.append({
-                "role": item.get("role", "user"),
-                "content": item.get("content", "")
-            })
-        
-        messages.append({"role": "user", "content": user_message})
-        return messages

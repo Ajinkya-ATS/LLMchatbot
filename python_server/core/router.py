@@ -1,6 +1,7 @@
 import requests
 from utils.response_cleaner import mode_selection, boolean_filter
 from utils.basic_utils import build_context
+from utils.ollama_utils import _call_ollama
 from langchain_ollama import ChatOllama
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
@@ -52,32 +53,25 @@ class Router: # Mode means, agentic, grafcet or simple
         
         history_summary = "\n".join(format_msg(m) for m in history[-3:]) or "No history."
 
-        # directly hit ollama
-        payload = {
-            "model": ROUTER_MODEL, # or tiny fast model
-            "messages": [
-                {"role": "user", "content": MODE_SELECTION_PROMPT.format(
-                    history_summary=history_summary,
-                    message=message,
-                )}
-            ],
-            "stream": False,
-            "options": {"temperature": 0.0}
-        }
+        prompt = MODE_SELECTION_PROMPT.format(
+            history_summary=history_summary,
+            message=message,
+        )
 
-        try:
-            r = requests.post(f"{Config.OLLAMA_BASE_URL}/api/chat", json=payload, timeout=600)
-            r.raise_for_status() # Break if HTTP failed
-            text = r.json()["message"]["content"].strip()
-            match = mode_selection(text)
-            if (match is not None):
-                return match
-            else:
-                return "normal"
+        result = _call_ollama(
+            model=ROUTER_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.0,
+            mode="router"
+        )
 
-        except Exception as e:
-            print(f"Router error: {e}") # For now
+        if isinstance(result, dict) and "error" in result:
+            print(f"Router error: {result['error']}")
             return "normal"
+
+        text = result["response"].strip()
+        match = mode_selection(text)
+        return match if match is not None else "normal"
         
     def check_pdf_rag_eligibility(self, message: str, history: list, retrieved_items) -> bool:
         """
@@ -100,28 +94,25 @@ class Router: # Mode means, agentic, grafcet or simple
         history_summary = "\n".join( f"{m.get('role', 'user')}: {m.get('content', '')[:140]}..." for m in history[-3:] ) or "No history."
         retrieved_items_str = build_context(retrieved_items)
 
-        payload = {
-            "model": ROUTER_MODEL, # or tiny fast model
-            "messages": [
-                {"role": "user", "content": RAG_ELIGIBILITY_PROMPT.format(
-                    retrieved_items=retrieved_items_str,
-                    history_summary=history_summary,
-                    message=message
-                )}
-            ],
-            "stream": False,
-            "options": {"temperature": 0.0}
-        }
+        prompt = RAG_ELIGIBILITY_PROMPT.format(
+            retrieved_items=retrieved_items_str,
+            history_summary=history_summary,
+            message=message
+        )
 
-        try:
-            r = requests.post(f"{Config.OLLAMA_BASE_URL}/api/chat", json=payload, timeout=600)
-            r.raise_for_status() # Break if HTTP failed
-            text = r.json()["message"]["content"].strip()
-            return boolean_filter(text)
-        
-        except Exception as e:
-            print(f"Router error: {e}") # For now
+        result = _call_ollama(
+            model=ROUTER_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.0,
+            mode="rag_router"
+        )
+
+        if isinstance(result, dict) and "error" in result:
+            print(f"RAG eligibility router error: {result['error']}")
             return False
+
+        text = result["response"].strip()
+        return boolean_filter(text)
         
     def should_use_csv(self, message, model, conversation_history):
         """
@@ -139,25 +130,22 @@ class Router: # Mode means, agentic, grafcet or simple
         """
         history_summary = "\n".join( f"{m.get('role', 'user')}: {m.get('content', '')[:140]}..." for m in conversation_history[-3:] ) or "No history."
 
-        payload = {
-            "model": model, # or tiny fast model
-            "messages": [
-                {"role": "user", "content": CSV_AGENT_ELIGIBILITY.format(
-                    query=message,
-                    history=history_summary
-                )}
-            ],
-            "stream": False,
-            "options": {"temperature": 0.0}
-        }
+        prompt = CSV_AGENT_ELIGIBILITY.format(
+            query=message,
+            history=history_summary
+        )
 
-        try:
-            r = requests.post(f"{Config.OLLAMA_BASE_URL}/api/chat", json=payload, timeout=600)
-            r.raise_for_status() # Break if HTTP failed
-            text = r.json()["message"]["content"].strip()
-            result = boolean_filter(text)
-            return result if isinstance(result, bool) else False
+        result = _call_ollama(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.0,
+            mode="csv_router"
+        )
 
-        except Exception as e:
-            print(f"Router error: {e}") # For now
+        if isinstance(result, dict) and "error" in result:
+            print(f"CSV router error: {result['error']}")
             return False
+
+        text = result["response"].strip()
+        result_bool = boolean_filter(text)
+        return result_bool if isinstance(result_bool, bool) else False

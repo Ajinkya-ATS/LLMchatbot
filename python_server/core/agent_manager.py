@@ -1,15 +1,12 @@
 from langchain_classic.agents import create_react_agent, AgentExecutor
 from langchain_ollama import ChatOllama
-from functools import lru_cache
 from .tool_manager import ToolManager
 from .prompt_manager import PromptManager
 from config import Config
 from langchain_experimental.agents import create_pandas_dataframe_agent
 from prompts.csv_prefix_prompt import CSV_PREFIX_PROMPT
 import pandas as pd
-import matplotlib.pyplot as plt
 from langchain.tools import tool
-from functools import partial
 
 class CSVAgent:
     """
