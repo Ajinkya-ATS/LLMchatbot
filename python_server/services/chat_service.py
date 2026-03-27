@@ -1,6 +1,6 @@
 from flask import jsonify
 import requests
-from config import OLLAMA_BASE_URL
+from config import Config
 from utils.response_cleaner import clean_response, boolean_filter
 from utils.basic_utils import formatted_datetime, format_history, build_context
 from core.agent_manager import AgenticMode, CSVAgent
@@ -34,6 +34,15 @@ class ChatService:
         message = data.get("message")
         model = data.get("model")
         conversation_history = data.get("conversationHistory", [])
+        normalized_history = []
+        for item in conversation_history:
+            if isinstance(item, dict):
+                normalized_history.append(item)
+            elif isinstance(item, str):
+                normalized_history.append({"role": "user", "content": item})
+            else:
+                normalized_history.append({"role": "user", "content": str(item)})
+
         uploaded_file = data.get("uploadedFile", None)
         if not message or not model:
             return {"error": "Message and model are required"}, 400
@@ -42,14 +51,14 @@ class ChatService:
             return self._handle_uploaded_file(
                 message=message,
                 model=model,
-                conversation_history=conversation_history,
+                conversation_history=normalized_history,
                 uploaded_file=uploaded_file
             )
 
         return self._handle_text_only_chat(
             message=message,
             model=model,
-            conversation_history=conversation_history
+            conversation_history=normalized_history
         )
 
     def _handle_text_only_chat(self, message: str, model: str, conversation_history: list):
@@ -57,7 +66,7 @@ class ChatService:
         Handles chat that does NOT involve any file uploads.
         Uses Router to determine mode: grafcet / agentic / normal.
         """
-        mode = self.router.get_mode(message, conversation_history)
+        mode = self.router.get_mode(message=message, history=conversation_history)
         
         handlers = {
             "grafcet": self._handle_grafcet,
@@ -269,7 +278,7 @@ class ChatService:
             }
 
             resp = requests.post(
-                f"{OLLAMA_BASE_URL}/api/chat",
+                f"{Config.OLLAMA_BASE_URL}/api/chat",
                 json=payload,
                 timeout=600
             )

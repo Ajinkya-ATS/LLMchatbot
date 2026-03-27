@@ -24,6 +24,14 @@ const ChatInterface = ({ selectedModel, isConnected, onToggleModelSelector, show
     scrollToBottom();
   }, [messages]);
 
+  // useEffect(() => {
+  //   return () => {
+  //     if (thinkingIntervalRef.current) {
+  //       clearInterval(thinkingIntervalRef.current);
+  //     }
+  //   };
+  // }, []);
+
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
@@ -118,7 +126,7 @@ const ChatInterface = ({ selectedModel, isConnected, onToggleModelSelector, show
       });
 
       const assistantMessage = {
-        id: Date.now() + 1,
+        id: crypto.randomUUID(),
         role: 'assistant',
         content: response.response,
         timestamp: response.timestamp,
@@ -314,7 +322,7 @@ const ChatInterface = ({ selectedModel, isConnected, onToggleModelSelector, show
             className="chat-input"
             value={inputMessage}
             onChange={(e) => setInputMessage(e.target.value)}
-            onKeyPress={handleKeyPress}
+            onKeyDown={handleKeyPress}
             placeholder={`Message ${selectedModel.name}...`}
             disabled={!isConnected || isLoading}
             rows={1}

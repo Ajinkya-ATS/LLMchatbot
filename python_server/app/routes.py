@@ -5,7 +5,7 @@ import uuid
 from werkzeug.utils import secure_filename
 from models import UploadedFile, db
 from utils.basic_utils import compute_file_hash
-from config import OLLAMA_BASE_URL, PORT
+from config import Config
 
 AVAILABLE_MODELS = [
     {
@@ -74,7 +74,7 @@ def register_routes(app):
         Returns version, available models, and connection status.
         """
         try:
-            r = requests.get(f"{OLLAMA_BASE_URL}/api/tags", timeout=5)
+            r = requests.get(f"{Config.OLLAMA_BASE_URL}/api/tags", timeout=5)
             r.raise_for_status()
             data = r.json()
             return jsonify({
@@ -96,6 +96,8 @@ def register_routes(app):
         Handles agentic mode, csv/pdf upload integration, and normal chat.
         """
         data = request.get_json()
+        if data is None:
+            return {"error: Invalid Request, no payload"}, 400
         result = app.chat_service.handle_chat(data)
         return jsonify(result)
 
@@ -125,7 +127,7 @@ def register_routes(app):
             
             os.makedirs(UPLOAD_FOLDER, exist_ok=True)
             file_hash = compute_file_hash(file)
-            # file.seek(0) # This resets the cursor which may be moved to end due to compute_file_hash
+            file.seek(0) # This resets the cursor which may be moved to end due to compute_file_hash
             existing_file = UploadedFile.query.filter_by(file_hash=file_hash).first()
             
             if existing_file:
@@ -159,7 +161,6 @@ def register_routes(app):
                 file_path=filepath
             )
             db.session.add(new_file)
-            db.session.commit()
 
             try:
                 if ext == 'pdf':
@@ -170,11 +171,12 @@ def register_routes(app):
             except Exception as e:
                 print(f"Warning: Failed to process embeddings for {file_id}: {str(e)}")
             
+            db.session.commit()
+
             return jsonify({
                 "status": "success",
                 "fileId": file_id,
                 "fileName": filename,
-                "filePath": filepath,
                 "fileType": file.content_type
             }), 200
         
@@ -197,7 +199,7 @@ def register_routes(app):
 
         try:
             resp = requests.post(
-                f"{OLLAMA_BASE_URL}/api/pull",
+                f"{Config.OLLAMA_BASE_URL}/api/pull",
                 json={"name": model_name, "stream": False},
                 timeout=600  # long timeout for pulling large models
             )
@@ -211,5 +213,5 @@ def register_routes(app):
 
         except Exception as e:
             print("Pull model error:", str(e))
-            error_msg = getattr(e.response, 'json', lambda: {}).get("error", "Failed to pull model")
+            error_msg = e.response.json().get("error", "Failed to pull model")
             return jsonify({"error": error_msg}), 500

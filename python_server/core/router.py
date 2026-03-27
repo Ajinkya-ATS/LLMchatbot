@@ -4,7 +4,7 @@ from utils.basic_utils import build_context
 from langchain_ollama import ChatOllama
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
-from config import OLLAMA_BASE_URL
+from config import Config
 from prompts.mode_selection_prompt import MODE_SELECTION_PROMPT
 from prompts.rag_eligibility_checker_prompt import RAG_ELIGIBILITY_PROMPT
 from prompts.csv_agent_eligibility import CSV_AGENT_ELIGIBILITY
@@ -24,8 +24,7 @@ class Router: # Mode means, agentic, grafcet or simple
         - agentic (tool-using REAct agent)
         - normal (default chat)
     """
-    @staticmethod
-    def get_mode(message: str, history: list, retrieved_items: list = None) -> str:
+    def get_mode(self, message: str, history: list) -> str:
         """
         Determines if the user wants: grafcet, agentic, or normal chat.
         Uses a lightweight LLM (router model) to classify the request.
@@ -39,13 +38,19 @@ class Router: # Mode means, agentic, grafcet or simple
             str: "grafcet", "agentic", or "normal"
         """
         #Just taking last 3 messages in history
-        history_summary = "\n".join( f"{m.get('role', 'user')}: {m.get('content', '')[:140]}..." for m in history[-3:] ) or "No history."
+        def format_msg(item):
+            if isinstance(item, dict):
+                role = item.get('role', 'user')
+                content = str(item.get('content', ''))[:140]
+            elif isinstance(item, str):
+                role = 'user'
+                content = item[:140]
+            else:
+                role = 'unknown'
+                content = str(item)[:140]
+            return f"{role}: {content}..."
         
-        # Format retrieved context for the prompt
-        if retrieved_items and len(retrieved_items) > 0:
-            retrieved_context = "\n---\n".join(retrieved_items[:3])  # Use top 3 retrieved items
-        else:
-            retrieved_context = "No documents retrieved."
+        history_summary = "\n".join(format_msg(m) for m in history[-3:]) or "No history."
 
         # directly hit ollama
         payload = {
@@ -54,7 +59,6 @@ class Router: # Mode means, agentic, grafcet or simple
                 {"role": "user", "content": MODE_SELECTION_PROMPT.format(
                     history_summary=history_summary,
                     message=message,
-                    retrieved_context=retrieved_context
                 )}
             ],
             "stream": False,
@@ -62,7 +66,7 @@ class Router: # Mode means, agentic, grafcet or simple
         }
 
         try:
-            r = requests.post(f"{OLLAMA_BASE_URL}/api/chat", json=payload, timeout=600)
+            r = requests.post(f"{Config.OLLAMA_BASE_URL}/api/chat", json=payload, timeout=600)
             r.raise_for_status() # Break if HTTP failed
             text = r.json()["message"]["content"].strip()
             match = mode_selection(text)
@@ -75,8 +79,7 @@ class Router: # Mode means, agentic, grafcet or simple
             print(f"Router error: {e}") # For now
             return "normal"
         
-    @staticmethod
-    def check_pdf_rag_eligibility(message: str, history: list, retrieved_items) -> bool:
+    def check_pdf_rag_eligibility(self, message: str, history: list, retrieved_items) -> bool:
         """
         Determines whether to enable PDF RAG processing using LLM‑based reasoning.
 
@@ -111,7 +114,7 @@ class Router: # Mode means, agentic, grafcet or simple
         }
 
         try:
-            r = requests.post(f"{OLLAMA_BASE_URL}/api/chat", json=payload, timeout=600)
+            r = requests.post(f"{Config.OLLAMA_BASE_URL}/api/chat", json=payload, timeout=600)
             r.raise_for_status() # Break if HTTP failed
             text = r.json()["message"]["content"].strip()
             return boolean_filter(text)
@@ -120,8 +123,7 @@ class Router: # Mode means, agentic, grafcet or simple
             print(f"Router error: {e}") # For now
             return False
         
-    @staticmethod
-    def should_use_csv(message, model, conversation_history):
+    def should_use_csv(self, message, model, conversation_history):
         """
         Checks whether a user query should be routed to the CSV agent.
 
@@ -150,14 +152,11 @@ class Router: # Mode means, agentic, grafcet or simple
         }
 
         try:
-            r = requests.post(f"{OLLAMA_BASE_URL}/api/chat", json=payload, timeout=600)
+            r = requests.post(f"{Config.OLLAMA_BASE_URL}/api/chat", json=payload, timeout=600)
             r.raise_for_status() # Break if HTTP failed
             text = r.json()["message"]["content"].strip()
-            use_csv_agent = boolean_filter(text)
-            if (use_csv_agent is not None):
-                return use_csv_agent
-            else:
-                return False
+            result = boolean_filter(text)
+            return result if isinstance(result, bool) else False
 
         except Exception as e:
             print(f"Router error: {e}") # For now

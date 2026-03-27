@@ -14,9 +14,11 @@ def mode_selection(text: str) -> Optional[str]:
     
     pattern = r"(grafcet|agentic|normal)"
     match = re.fullmatch(pattern, text)
-    
+    allowed_modes = {"grafcet", "agentic", "normal"}
     if match:
-        return match.group(1)
+        mode = match.group(1)
+        if mode in allowed_modes:
+            return mode
     
     return None
 

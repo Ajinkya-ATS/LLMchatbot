@@ -14,9 +14,6 @@ Decision criteria (apply strictly):
 
 - "normal"    for everything else: greetings, thanks, meta questions about the AI, off-topic subjects, general knowledge, document summarization/analysis with RAG context, answering questions based on uploaded documents.
 
-RAG Context (retrieved documents):
-{retrieved_context}
-
 Recent turns (most recent at the bottom):
 {history_summary}
 

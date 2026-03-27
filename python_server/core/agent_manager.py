@@ -3,13 +3,13 @@ from langchain_ollama import ChatOllama
 from functools import lru_cache
 from .tool_manager import ToolManager
 from .prompt_manager import PromptManager
-from config import OLLAMA_BASE_URL
-from langchain_ollama import ChatOllama
+from config import Config
 from langchain_experimental.agents import create_pandas_dataframe_agent
 from prompts.csv_prefix_prompt import CSV_PREFIX_PROMPT
 import pandas as pd
 import matplotlib.pyplot as plt
 from langchain.tools import tool
+from functools import partial
 
 class CSVAgent:
     """
@@ -22,23 +22,23 @@ class CSVAgent:
         """
         self.agent = None
         self.df = None
-
+    
     @tool
-    def execute_plot_code(self, code: str) -> str:
+    @staticmethod
+    def execute_plot_code(df, code: str) -> str:
         """
-        Executes Python code passed from the agent (for plotting or transformations).
+        Executes Python code passed from the agent (for answering user question).
 
         The execution environment only exposes:
         - df: the loaded pandas DataFrame
         - pd: pandas library
-        - plt: matplotlib for plotting
 
         Returns:
             str: status message indicating success or error.
         """
         try:
-            exec(code, {"df": self.df, "pd": pd, "plt": plt})
-            return "Plot code executed successfully"
+            exec(code, {"df": df, "pd": pd})
+            return "code executed successfully"
         except Exception as e:
             return f"Error: {str(e)}"
     
@@ -59,7 +59,7 @@ class CSVAgent:
             llm = ChatOllama(
                 model=model,
                 temperature=0.1,
-                base_url="http://localhost:11434"
+                base_url=Config.OLLAMA_BASE_URL
             )
 
             self.agent = create_pandas_dataframe_agent(
@@ -69,7 +69,7 @@ class CSVAgent:
                 allow_dangerous_code=True,
                 agent_type="tool-calling",
                 prefix=CSV_PREFIX_PROMPT,
-                extra_tools=[self.execute_plot_code] # Will add it later for graph plotting logic
+                extra_tools=[CSVAgent.execute_plot_code] # Will add it later for graph plotting logic
             )
             return True
         except Exception as e:
@@ -97,18 +97,14 @@ class AgenticMode:
     Manages creation and caching of agentic mode LLM agents.
     Agents include tool use, REAct-style reasoning, and step-by-step workflows.
     """
-    @lru_cache(maxsize=128)
-    def get_agent(self, model: str):
-        """
-        Creates (and caches) an agentic REAct-based agent for a specific model.
-        Uses ToolManager & PromptManager for tools and custom prompts.
+    _agent_cache: dict[str, AgentExecutor] = {}
 
-        Args:
-            model (str): LLM model name.
-
-        Returns:
-            AgentExecutor: Configured agent ready to run tool-based reasoning.
-        """
+    def get_agent(self, model: str) -> AgentExecutor:
+        if model not in self._agent_cache:
+            self._agent_cache[model] = self._build_agent(model)
+        return self._agent_cache[model]
+    
+    def _build_agent(self, model: str) -> AgentExecutor:
         llm = ChatOllama(
             model=model,
             temperature=0,
@@ -117,14 +113,13 @@ class AgenticMode:
         )
         tools = ToolManager.get_tools()
         prompt = PromptManager.get_react_prompt()
-
         agent = create_react_agent(llm, tools, prompt=prompt)
         executor = AgentExecutor.from_agent_and_tools(
             agent=agent,
             tools=tools,
             verbose=True,
-            max_iterations=10,  # Prevent infinite loops
-            early_stopping_method="force",  # Force stop after max iterations
-            handle_parsing_errors="output_fixing",  # Handle malformed model outputs
+            max_iterations=10,
+            early_stopping_method="force",
+            handle_parsing_errors="output_fixing",
         )
         return executor
