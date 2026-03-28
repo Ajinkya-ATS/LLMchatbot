@@ -6,7 +6,12 @@ from config import Config
 from langchain_experimental.agents import create_pandas_dataframe_agent
 from prompts.csv_prefix_prompt import CSV_PREFIX_PROMPT
 import pandas as pd
+import numpy as np
 from langchain.tools import tool
+import ast
+from RestrictedPython import compile_restricted
+from RestrictedPython import safe_globals, utility_builtins
+
 
 class CSVAgent:
     """
@@ -19,6 +24,28 @@ class CSVAgent:
         """
         self.agent = None
         self.df = None
+    
+    def safe_execute_pandas(code: str, df):
+        byte_code = compile_restricted(
+            code,
+            filename="<restrictedCSV>",
+            mode="exec"
+        )
+
+        restricted_globals = {
+            **safe_globals,
+            **utility_builtins,
+            "_print_": print,
+            "pd": pd,
+            "np": np,
+            "df": df,
+        }
+
+        restricted_locals = {}
+
+        exec(byte_code, restricted_globals, restricted_locals)
+
+        return restricted_locals
     
     @tool
     @staticmethod
@@ -34,7 +61,7 @@ class CSVAgent:
             str: status message indicating success or error.
         """
         try:
-            exec(code, {"df": df, "pd": pd})
+            CSVAgent.safe_execute_pandas(code, df)
             return "code executed successfully"
         except Exception as e:
             return f"Error: {str(e)}"

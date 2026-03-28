@@ -1,6 +1,3 @@
-from flask import jsonify
-import requests
-from config import Config
 from utils.response_cleaner import clean_response, boolean_filter
 from utils.basic_utils import formatted_datetime, format_history, build_context
 from utils.ollama_utils import _call_ollama, _build_messages
