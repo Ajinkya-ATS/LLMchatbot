@@ -304,8 +304,15 @@ body {
 
 .chat-input-form {
   display: flex;
-  gap: 12px;
+  gap: 2px;
   align-items: flex-end;
+}
+
+.chat-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
 }
 
 .chat-input {
@@ -319,6 +326,67 @@ body {
   resize: none;
   font-family: inherit;
   transition: border-color 0.2s;
+}
+
+.upload-button {
+  background: #e8eaed;
+  color: #5e5e5e;
+  border: none;
+  padding: 12px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+}
+
+.upload-button:hover:not(:disabled) {
+  background: #d4d7db;
+}
+
+.upload-button:disabled {
+  background: #a0aec0;
+  cursor: not-allowed;
+}
+
+.uploaded-file-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #e3f2fd;
+  color: #1976d2;
+  padding: 6px 12px;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  max-width: 200px;
+}
+
+.uploaded-file-badge {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.remove-file-btn {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 18px;
+  padding: 0;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.remove-file-btn:hover {
+  opacity: 0.7;
 }
 
 .chat-input:focus {
